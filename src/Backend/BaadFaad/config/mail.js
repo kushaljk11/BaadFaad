@@ -1,12 +1,12 @@
 /**
  * @file config/mail.js
- * @description Resilient mail sender with provider fallback (Mailjet + SMTP).
+ * @description Resilient mail sender with provider fallback (Resend + Mailjet).
  */
 import Mailjet from "node-mailjet";
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
 let mailjetClient = null;
-let smtpTransporter = null;
+let resendClient = null;
 
 const MAIL_SEND_TIMEOUT_MS = Math.max(
   1000,
@@ -14,15 +14,14 @@ const MAIL_SEND_TIMEOUT_MS = Math.max(
 );
 
 const PROVIDERS = {
+  RESEND: "resend",
   MAILJET: "mailjet",
-  SMTP: "smtp",
 };
+
+const hasResendCredentials = () => Boolean(process.env.RESEND_API_KEY);
 
 const hasMailjetCredentials = () =>
   Boolean(process.env.MAILJET_API_KEY && process.env.MAILJET_SECRET_KEY);
-
-const hasSmtpCredentials = () =>
-  Boolean(process.env.SMTP_HOST && process.env.SMTP_PORT && process.env.SMTP_USER && process.env.SMTP_PASS);
 
 const buildMailError = (message, { statusCode, code, provider, details } = {}) => {
   const err = new Error(message);
@@ -118,67 +117,50 @@ const getMailjetClient = () => {
   return mailjetClient;
 };
 
-const getSmtpTransporter = () => {
-  if (!hasSmtpCredentials()) {
-    throw buildMailError("Missing SMTP credentials (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS)", {
+const getResendClient = () => {
+  const apiKey = process.env.RESEND_API_KEY;
+
+  if (!apiKey) {
+    throw buildMailError("Missing RESEND_API_KEY", {
       statusCode: 500,
-      code: "SMTP_CONFIG_MISSING",
-      provider: PROVIDERS.SMTP,
+      code: "RESEND_CONFIG_MISSING",
+      provider: PROVIDERS.RESEND,
     });
   }
 
-  if (!smtpTransporter) {
-    const secure = String(process.env.SMTP_SECURE || "false").toLowerCase() === "true";
-    const smtpTimeout = Math.max(
-      1000,
-      Number(process.env.SMTP_TIMEOUT_MS || MAIL_SEND_TIMEOUT_MS)
-    );
-    smtpTransporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT),
-      secure,
-      connectionTimeout: smtpTimeout,
-      greetingTimeout: smtpTimeout,
-      socketTimeout: smtpTimeout,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
+  if (!resendClient) {
+    resendClient = new Resend(apiKey);
   }
 
-  return smtpTransporter;
+  return resendClient;
 };
 
 const resolveProviderOrder = () => {
   const explicit = String(process.env.MAIL_PROVIDER || "").trim().toLowerCase();
 
-  if (explicit === PROVIDERS.SMTP) return [PROVIDERS.SMTP, PROVIDERS.MAILJET];
-  if (explicit === PROVIDERS.MAILJET) return [PROVIDERS.MAILJET, PROVIDERS.SMTP];
+  if (explicit === PROVIDERS.RESEND) return [PROVIDERS.RESEND, PROVIDERS.MAILJET];
+  if (explicit === PROVIDERS.MAILJET) return [PROVIDERS.MAILJET, PROVIDERS.RESEND];
 
   // Auto mode: pick available provider first.
-  if (hasMailjetCredentials()) return [PROVIDERS.MAILJET, PROVIDERS.SMTP];
-  if (hasSmtpCredentials()) return [PROVIDERS.SMTP, PROVIDERS.MAILJET];
+  if (hasResendCredentials()) return [PROVIDERS.RESEND, PROVIDERS.MAILJET];
+  if (hasMailjetCredentials()) return [PROVIDERS.MAILJET, PROVIDERS.RESEND];
 
   // Default preference when nothing is configured yet.
-  return [PROVIDERS.MAILJET, PROVIDERS.SMTP];
+  return [PROVIDERS.RESEND, PROVIDERS.MAILJET];
 };
 
 export const inspectMailConfig = () => {
   const providerOrder = resolveProviderOrder();
   const missing = {
+    resend: [],
     mailjet: [],
-    smtp: [],
     sender: [],
   };
 
+  if (!process.env.RESEND_API_KEY) missing.resend.push("RESEND_API_KEY");
+
   if (!process.env.MAILJET_API_KEY) missing.mailjet.push("MAILJET_API_KEY");
   if (!process.env.MAILJET_SECRET_KEY) missing.mailjet.push("MAILJET_SECRET_KEY");
-
-  if (!process.env.SMTP_HOST) missing.smtp.push("SMTP_HOST");
-  if (!process.env.SMTP_PORT) missing.smtp.push("SMTP_PORT");
-  if (!process.env.SMTP_USER) missing.smtp.push("SMTP_USER");
-  if (!process.env.SMTP_PASS) missing.smtp.push("SMTP_PASS");
 
   if (!process.env.MAIL_FROM_EMAIL && !process.env.EMAIL_USER) {
     missing.sender.push("MAIL_FROM_EMAIL|EMAIL_USER");
@@ -187,11 +169,50 @@ export const inspectMailConfig = () => {
   return {
     providerPreference: String(process.env.MAIL_PROVIDER || "auto").toLowerCase() || "auto",
     providerOrder,
+    resendConfigured: hasResendCredentials(),
     mailjetConfigured: hasMailjetCredentials(),
-    smtpConfigured: hasSmtpCredentials(),
     senderConfigured: Boolean(process.env.MAIL_FROM_EMAIL || process.env.EMAIL_USER),
     missing,
   };
+};
+
+const sendViaResend = async ({ recipients, subject, text, html, fromEmail, fromName }) => {
+  const client = getResendClient();
+
+  try {
+    const result = await withTimeout(
+      client.emails.send({
+        from: fromName ? `${fromName} <${fromEmail}>` : fromEmail,
+        to: recipients,
+        subject: subject || "",
+        text: text || html || "",
+        html: html || text || "",
+      }),
+      { timeoutMs: MAIL_SEND_TIMEOUT_MS, provider: PROVIDERS.RESEND, operation: "send" }
+    );
+
+    if (result?.error) {
+      throw buildMailError(result.error.message || "Resend send failed", {
+        statusCode: 502,
+        code: "RESEND_SEND_FAILED",
+        provider: PROVIDERS.RESEND,
+        details: result.error,
+      });
+    }
+
+    return { provider: PROVIDERS.RESEND, response: result?.data || result };
+  } catch (err) {
+    if (err?.code === "RESEND_SEND_FAILED") {
+      throw err;
+    }
+
+    throw buildMailError(err?.message || "Resend send failed", {
+      statusCode: err?.statusCode || 502,
+      code: "RESEND_SEND_FAILED",
+      provider: PROVIDERS.RESEND,
+      details: err,
+    });
+  }
 };
 
 const sendViaMailjet = async ({ recipients, subject, text, html, fromEmail, fromName }) => {
@@ -227,33 +248,8 @@ const sendViaMailjet = async ({ recipients, subject, text, html, fromEmail, from
   }
 };
 
-const sendViaSmtp = async ({ recipients, subject, text, html, fromEmail, fromName }) => {
-  const transporter = getSmtpTransporter();
-
-  try {
-    const info = await withTimeout(
-      transporter.sendMail({
-        from: fromName ? `"${fromName}" <${fromEmail}>` : fromEmail,
-        to: recipients.join(", "),
-        subject: subject || "",
-        text: text || html || "",
-        html: html || text || "",
-      }),
-      { timeoutMs: MAIL_SEND_TIMEOUT_MS, provider: PROVIDERS.SMTP, operation: "send" }
-    );
-    return { provider: PROVIDERS.SMTP, response: info };
-  } catch (err) {
-    throw buildMailError(err?.message || "SMTP send failed", {
-      statusCode: 502,
-      code: "SMTP_SEND_FAILED",
-      provider: PROVIDERS.SMTP,
-      details: err,
-    });
-  }
-};
-
 /**
- * Send an email via Mailjet.
+ * Send an email via configured provider.
  * @param {object} params
  * @param {string|string[]} params.to - Recipient email(s)
  * @param {string} params.subject - Email subject
@@ -290,21 +286,26 @@ export const sendEmail = async ({
   const errors = [];
 
   for (const provider of order) {
-    try {
-      if (provider === PROVIDERS.MAILJET && hasMailjetCredentials()) {
+    if (provider === PROVIDERS.RESEND && hasResendCredentials()) {
+      try {
+        return await sendViaResend({ recipients, subject, text, html, fromEmail, fromName });
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+
+    if (provider === PROVIDERS.MAILJET && hasMailjetCredentials()) {
+      try {
         return await sendViaMailjet({ recipients, subject, text, html, fromEmail, fromName });
+      } catch (error) {
+        errors.push(error);
       }
-      if (provider === PROVIDERS.SMTP && hasSmtpCredentials()) {
-        return await sendViaSmtp({ recipients, subject, text, html, fromEmail, fromName });
-      }
-    } catch (error) {
-      errors.push(error);
     }
   }
 
-  if (!hasMailjetCredentials() && !hasSmtpCredentials()) {
+  if (!hasResendCredentials() && !hasMailjetCredentials()) {
     throw buildMailError(
-      "No mail provider configured. Set MAILJET_API_KEY/MAILJET_SECRET_KEY or SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS",
+      "No mail provider configured. Set RESEND_API_KEY or MAILJET_API_KEY/MAILJET_SECRET_KEY",
       { statusCode: 500, code: "MAIL_PROVIDER_NOT_CONFIGURED" }
     );
   }
@@ -314,10 +315,10 @@ export const sendEmail = async ({
 
   if (
     topError?.code === "MAILJET_ACCOUNT_BLOCKED" &&
-    !hasSmtpCredentials()
+    !hasResendCredentials()
   ) {
     throw buildMailError(
-      "Mailjet account is temporarily blocked (401). Configure SMTP_* variables or contact Mailjet support.",
+      "Mailjet account is temporarily blocked (401). Configure RESEND_API_KEY or contact Mailjet support.",
       {
         statusCode: 401,
         code: "MAILJET_ACCOUNT_BLOCKED",
@@ -350,6 +351,25 @@ export const verifyMailConnection = async () => {
   const order = resolveProviderOrder();
 
   for (const provider of order) {
+    if (provider === PROVIDERS.RESEND && hasResendCredentials()) {
+      const client = getResendClient();
+      const result = await withTimeout(
+        client.domains.list(),
+        { timeoutMs: MAIL_SEND_TIMEOUT_MS, provider: PROVIDERS.RESEND, operation: "verify" }
+      );
+
+      if (result?.error) {
+        throw buildMailError(result.error.message || "Resend verification failed", {
+          statusCode: 502,
+          code: "RESEND_VERIFY_FAILED",
+          provider: PROVIDERS.RESEND,
+          details: result.error,
+        });
+      }
+
+      return { ok: true, provider: PROVIDERS.RESEND };
+    }
+
     if (provider === PROVIDERS.MAILJET && hasMailjetCredentials()) {
       const client = getMailjetClient();
       await withTimeout(
@@ -357,14 +377,6 @@ export const verifyMailConnection = async () => {
         { timeoutMs: MAIL_SEND_TIMEOUT_MS, provider: PROVIDERS.MAILJET, operation: "verify" }
       );
       return { ok: true, provider: PROVIDERS.MAILJET };
-    }
-    if (provider === PROVIDERS.SMTP && hasSmtpCredentials()) {
-      const transporter = getSmtpTransporter();
-      await withTimeout(
-        transporter.verify(),
-        { timeoutMs: MAIL_SEND_TIMEOUT_MS, provider: PROVIDERS.SMTP, operation: "verify" }
-      );
-      return { ok: true, provider: PROVIDERS.SMTP };
     }
   }
 

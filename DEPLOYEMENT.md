@@ -35,7 +35,7 @@ Backend — Render
 	- `GOOGLE_CALLBACK_URL` = `https://classathon-hisabsathi-baadfaad.onrender.com/api/auth/google/callback`
 	- `BACKEND_URL` = `https://classathon-hisabsathi-baadfaad.onrender.com`
 	- `FRONTEND_URL` = `https://baadfaad.vercel.app`
-	- `EMAIL_USER` / `EMAIL_PASS` / `SMTP_HOST` / `SMTP_PORT` (if using email)
+	- `RESEND_API_KEY` and `MAIL_FROM_EMAIL` (if using email)
 	- Payment gateway keys (ESEWA*, KHALTI*), if used in production
 4. Deploy / restart the service.
 
