@@ -28,7 +28,7 @@ for (const envPath of envCandidates) {
 
 /**
  * Extract the first valid JSON object/array from an AI text response.
- * Handles fenced code blocks and raw JSON.
+ * Handles fenced code blocks and raw JSON. hh
  * @param {string} text - raw AI response text
  * @returns {string} trimmed JSON string
  */
