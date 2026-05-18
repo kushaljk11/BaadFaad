@@ -95,7 +95,7 @@ if (process.env.NODE_ENV === 'production') {
   app.use(cors({ origin: true, credentials: true }));
   // Global CORS middleware above will handle preflight OPTIONS requests in development.
 }
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 const PORT = process.env.PORT || 5000;
 

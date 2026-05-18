@@ -92,14 +92,10 @@ const Login = () => {
 
   const handleContinue = async () => {
     try {
-      // If this is an incoming group link, disallow name-only continue
-      if (incomingType === 'group') {
-        return;
-      }
       const storedBefore = localStorage.getItem('postAuthRedirect');
       console.debug('Login.handleContinue: from=', from, 'postAuthRedirect=', storedBefore);
 
-      const response = await api.post('/auth/continue', { fullName });
+      const response = await api.post('/auth/continue', { fullName: fullName.trim() });
       console.debug('Login.handleContinue: /auth/continue response=', response.data);
       const { token, user } = response.data;
       login(user, token);
@@ -220,26 +216,19 @@ const Login = () => {
             </span>
             Continue with Google
           </button>
-          {/* Name-only continue (allowed for session links, disabled/hidden for group links) */}
-          {incomingType !== 'group' ? (
-            <div className="mt-3">
-              <button
-                onClick={handleContinue}
-                disabled={!fullName.trim()}
-                className={`w-full text-slate-700 font-medium py-3 rounded-lg border border-zinc-200 bg-white flex items-center justify-center gap-2 transition-colors ${fullName.trim() ? 'hover:bg-zinc-50' : 'opacity-60 cursor-not-allowed'}`}
-              >
-                Continue with name
-              </button>
-              {!fullName.trim() && (
-                <p className="text-xs text-gray-500 mt-2 text-center">Enter your name to continue as guest.</p>
-              )}
-            </div>
-          ) : (
-            <div className="mt-3 text-center">
-              <p className="text-sm text-rose-600 mb-4">This group link requires signing in with Google to verify your Gmail account.</p>
-              <button onClick={handleGoogleLogin} className="w-full rounded-full bg-emerald-400 px-6 py-3 font-bold text-white">Continue with Google</button>
-            </div>
-          )}
+          {/* Name-only continue */}
+          <div className="mt-3">
+            <button
+              onClick={handleContinue}
+              disabled={!fullName.trim()}
+              className={`w-full text-slate-700 font-medium py-3 rounded-lg border border-zinc-200 bg-white flex items-center justify-center gap-2 transition-colors ${fullName.trim() ? 'hover:bg-zinc-50' : 'opacity-60 cursor-not-allowed'}`}
+            >
+              Continue with name
+            </button>
+            {!fullName.trim() && (
+              <p className="text-xs text-gray-500 mt-2 text-center">Enter your name to continue as guest.</p>
+            )}
+          </div>
 
           {/* Terms and Privacy */}
           <p className="text-center text-xs text-gray-500 mt-6">

@@ -22,8 +22,6 @@ export default function JoinSplit() {
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const currentUserId = user?._id || user?.id;
-  const userEmail = String(user?.email || '').toLowerCase();
-  const isOAuthUser = Boolean(userEmail) && !userEmail.endsWith('@local');
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [joining, setJoining] = useState(false);
@@ -89,15 +87,6 @@ export default function JoinSplit() {
       return;
     }
 
-    if (effectiveTypeLocal === 'group' && !isOAuthUser) {
-      toast.error('Group link requires Google login');
-      try {
-        localStorage.setItem('postAuthRedirect', JSON.stringify({ pathname: location.pathname, search: location.search }));
-      } catch (e) { console.warn('postAuthRedirect save failed', e); }
-      navigate('/login', { state: { from: location } });
-      return;
-    }
-
     setJoining(true);
     joinAttemptKeyRef.current = joinKey;
     const toastId = toast.loading("Joining session...");
@@ -128,7 +117,7 @@ export default function JoinSplit() {
     } finally {
       setJoining(false);
     }
-  }, [currentUserId, sessionId, groupId, type, detectedType, pathname, isOAuthUser, navigate, location, splitId]);
+  }, [currentUserId, sessionId, groupId, type, detectedType, pathname, navigate, location, splitId]);
 
   // Auto-join when user becomes available
   useEffect(() => {
