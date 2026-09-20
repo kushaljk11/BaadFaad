@@ -71,7 +71,7 @@ export default function Footer() {
                 </div>
 
                 <div className="mt-14 border-t border-slate-800 pt-8">
-                    <div className="flex flex-col gap-4 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-col gap-4 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between">
                         <p>© 2026 BaadFaad Inc. All rights reserved.</p>
                         <div className="flex items-center gap-6">
                             <a href="#terms" className="hover:text-slate-300">Terms of Service</a>

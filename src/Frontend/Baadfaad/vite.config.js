@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
   envDir: __dirname,
@@ -56,22 +59,6 @@ export default defineConfig({
         // Runtime caching strategies
         runtimeCaching: [
           {
-            // Cache API GET requests with Network First strategy
-            urlPattern: /^https?:\/\/.*\/api\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24, // 24 hours
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-              networkTimeoutSeconds: 10,
-            },
-          },
-          {
             // Cache images
             urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/i,
             handler: 'CacheFirst',
@@ -106,12 +93,11 @@ export default defineConfig({
         ],
         // Ensure SPA routing works offline — navigations fall back to index.html
         navigateFallback: '/index.html',
-        // Allow SPA navigations for split routes (session links, QR deep links)
-        navigateFallbackAllowlist: [/^\/split/],
+        // All application routes are SPA deep links; only API routes are excluded.
         navigateFallbackDenylist: [/^\/api/],
       },
       devOptions: {
-        enabled: true, // Enable PWA in dev for testing
+        enabled: false,
       },
     }),
   ],

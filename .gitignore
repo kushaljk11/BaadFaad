@@ -1,1 +1,4 @@
 .env
+src/Backend/BaadFaad/generated/
+src/Frontend/Baadfaad/test-results/
+src/Frontend/Baadfaad/playwright-report/

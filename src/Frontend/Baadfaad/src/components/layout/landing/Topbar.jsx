@@ -67,7 +67,7 @@ export default function Topbar() {
 
         <Link
           to={startSplittingTo}
-          className="hidden cursor-pointer rounded-full bg-emerald-400 px-6 py-2 text-sm font-bold text-white transition hover:bg-emerald-500 md:inline-flex"
+          className="hidden cursor-pointer rounded-full bg-emerald-400 px-6 py-2 text-sm font-bold text-slate-950 transition hover:bg-emerald-300 md:inline-flex"
         >
           Start Splitting
         </Link>

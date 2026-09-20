@@ -14,7 +14,7 @@
  */
 import { FaBars, FaTimes, FaSignOutAlt } from "react-icons/fa";
 import logo from "@root-assets/Logo-01.png";
-import { useAuth } from "../../../context/authContext";
+import { useAuth } from "../../../context/authState";
 import { useNavigate } from "react-router-dom";
 
 export default function TopBar({ onMenuToggle, isOpen }) {
@@ -71,7 +71,7 @@ export default function TopBar({ onMenuToggle, isOpen }) {
           {/* Mobile Menu Button */}
           <button
             onClick={onMenuToggle}
-            className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-400 text-white md:hidden"
+            className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-400 text-slate-950 md:hidden"
             aria-label="Toggle menu"
           >
             {isOpen ? <FaTimes className="text-lg" /> : <FaBars className="text-lg" />}

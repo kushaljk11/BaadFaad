@@ -15,12 +15,12 @@ import TopBar from "../../components/layout/Dashboard/TopBar";
 import { FaSpinner, FaUsers, FaCheckCircle } from "react-icons/fa";
 import api from "../../config/config";
 import toast from "react-hot-toast";
-import { useAuth } from "../../context/authContext";
+import { useAuth } from "../../context/authState";
 
 export default function JoinSplit() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { user, login } = useAuth();
   const currentUserId = user?._id || user?.id;
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -31,6 +31,7 @@ export default function JoinSplit() {
   const splitId = searchParams.get("splitId");
   const sessionId = searchParams.get("sessionId");
   const groupId = searchParams.get("groupId");
+  const inviteToken = searchParams.get("invite");
   const type = searchParams.get("type");
   const pathname = location.pathname || '';
 
@@ -58,21 +59,20 @@ export default function JoinSplit() {
 
   // Guest fields for unauthenticated session joins
   const [guestName, setGuestName] = useState('');
-  const [guestEmail, setGuestEmail] = useState('');
 
   const handleJoin = useCallback(async () => {
     const effectiveTypeLocal = (pathname.includes('/group') ? 'group' : (pathname.includes('/session') ? 'session' : (type || detectedType || 'session')));
-    const joinKey = `${effectiveTypeLocal}:${splitId || ""}:${sessionId || ""}:${groupId || ""}:${currentUserId || ""}`;
+    const joinKey = `${effectiveTypeLocal}:${splitId || ""}:${sessionId || ""}:${groupId || ""}:${inviteToken || ""}:${currentUserId || ""}`;
     if (joinAttemptKeyRef.current === joinKey) return;
 
     // Validate depending on link type
     if (effectiveTypeLocal === 'group') {
-      if (!groupId) {
+      if (!groupId || !inviteToken) {
         toast.error('Invalid group link');
         return;
       }
     } else {
-      if (!sessionId) {
+      if (!sessionId || !inviteToken) {
         toast.error('Invalid session link');
         return;
       }
@@ -92,7 +92,7 @@ export default function JoinSplit() {
     const toastId = toast.loading("Joining session...");
 
     try {
-      const payload = { userId: currentUserId };
+      const payload = { inviteToken };
 
       if (effectiveTypeLocal === 'group') {
         if (!groupId) {
@@ -117,7 +117,7 @@ export default function JoinSplit() {
     } finally {
       setJoining(false);
     }
-  }, [currentUserId, sessionId, groupId, type, detectedType, pathname, navigate, location, splitId]);
+  }, [currentUserId, sessionId, groupId, inviteToken, type, detectedType, pathname, navigate, location, splitId]);
 
   // Auto-join when user becomes available
   useEffect(() => {
@@ -159,12 +159,8 @@ export default function JoinSplit() {
 
               <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-slate-600 mb-2">Your name</label>
-                  <input value={guestName} onChange={(e) => setGuestName(e.target.value)} className="w-full rounded-md border px-3 py-2" placeholder="e.g. Alex" />
-                </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-slate-600 mb-2">Email (optional)</label>
-                  <input value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} className="w-full rounded-md border px-3 py-2" placeholder="name@example.com" />
+                  <label htmlFor="guestName" className="block text-sm font-medium text-slate-600 mb-2">Your name</label>
+                  <input id="guestName" value={guestName} onChange={(e) => setGuestName(e.target.value)} className="w-full rounded-md border px-3 py-2" placeholder="e.g. Alex" />
                 </div>
                 <div className="flex gap-3">
                   <button onClick={async () => {
@@ -172,7 +168,12 @@ export default function JoinSplit() {
                     setJoining(true);
                     const tId = toast.loading('Joining as guest...');
                     try {
-                      await api.post(`/session/join/${sessionId}`, { name: guestName.trim(), email: guestEmail.trim() });
+                      const authResponse = await api.post('/auth/continue', { fullName: guestName.trim() });
+                      const guestUser = authResponse.data?.user;
+                      const guestToken = authResponse.data?.token;
+                      if (!guestUser || !guestToken) throw new Error('Guest authentication failed');
+                      login(guestUser, guestToken);
+                      await api.post(`/session/join/${sessionId}`, { inviteToken });
                       toast.dismiss(tId); toast.success('Joined successfully');
                       navigate(`/split/joined?splitId=${splitId}&sessionId=${sessionId}&type=${type || 'session'}`);
                     } catch (err) {

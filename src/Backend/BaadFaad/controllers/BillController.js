@@ -24,15 +24,22 @@ export default async function billController(req, res) {
       });
     }
 
+    if (typeof image !== 'string' || image.length > 8_000_000) {
+      return res.status(413).json({ error: 'Image must be a base64 string smaller than 8 MB' });
+    }
+
+    if (!/^data:image\/(png|jpe?g|webp);base64,[A-Za-z0-9+/=\s]+$/i.test(image)) {
+      return res.status(400).json({ error: 'Unsupported or invalid image data' });
+    }
+
     const result = await parseBill(image);
 
     res.json(result);
 
   } catch (err) {
 
-    res.status(500).json({
-      error: err.message
-    });
+    console.error('Bill parsing failed:', err);
+    res.status(502).json({ error: 'Bill parsing failed' });
 
   }
 }

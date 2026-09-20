@@ -21,13 +21,15 @@ import {
   getSessionBySplitId,
   joinSession,
 } from "../controllers/session.controller.js";
+import { validate } from '../middleware/validate.middleware.js';
+import { idParams, invitationJoinBody, paginationQuery, sessionCreateBody, sessionIdParams, splitIdParams } from '../validation/schemas.js';
 
 const router = express.Router();
 
-router.post("/", createSession);
-router.post("/join/:sessionId", joinSession);
-router.get("/", getAllSessions);
-router.get("/split/:splitId", getSessionBySplitId);
-router.get("/:id", getSessionById);
+router.post("/", validate({ body: sessionCreateBody }), createSession);
+router.post("/join/:sessionId", validate({ params: sessionIdParams, body: invitationJoinBody }), joinSession);
+router.get("/", validate({ query: paginationQuery }), getAllSessions);
+router.get("/split/:splitId", validate({ params: splitIdParams }), getSessionBySplitId);
+router.get("/:id", validate({ params: idParams }), getSessionById);
 
 export default router;

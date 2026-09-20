@@ -67,7 +67,6 @@ export async function parseBill(base64Image) {
       apiKey: process.env.GOOGLE_API_KEY,
     });
 
-    console.log("🤖 Sending to Gemini for parsing...");
 
     const dataUrlMatch = base64Image.match(/^data:(image\/[\w.+-]+);base64,(.+)$/);
     const mimeType = dataUrlMatch?.[1] || "image/png";
@@ -113,8 +112,6 @@ Format:
     const rawText = typeof response.text === "function" ? response.text() : response.text;
     const jsonText = extractJson(rawText);
 
-    console.log("\n✅ FINAL JSON OUTPUT:\n");
-    console.log(jsonText);
 
     return JSON.parse(jsonText);
   } catch (error) {

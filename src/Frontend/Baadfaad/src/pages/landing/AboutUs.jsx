@@ -30,20 +30,20 @@ export default function AboutUs() {
         <section className="mx-auto w-full max-w-6xl">
           <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
             <div>
-              <span className="inline-flex items-center rounded-full bg-emerald-100 px-4 py-1 text-xs font-bold tracking-wider text-emerald-500">
+              <span className="inline-flex items-center rounded-full bg-emerald-100 px-4 py-1 text-xs font-bold tracking-wider text-emerald-800">
                 A SOCIAL SPLITTING APP FOR 2026
               </span>
 
               <h1 className="mt-6 text-5xl font-bold leading-tight text-slate-900 sm:text-6xl">
                 Built by 
                 <br />
-                <span className="text-emerald-400">Students.</span>
+                <span className="text-emerald-700">Students.</span>
                 <br />
                 For Real <br />
-                <span className="text-emerald-400"></span>Tables.
+                <span className="text-emerald-700"></span>Tables.
               </h1>
 
-              <p className="mt-6 max-w-xl text-lg leading-relaxed text-slate-500">
+              <p className="mt-6 max-w-xl text-lg leading-relaxed text-slate-700">
                 From the halls of student innovation at College to every dining
                 table in Nepal. We&apos;re redefining how shared moments are
                 split fair.
@@ -85,7 +85,7 @@ export default function AboutUs() {
               <span className="h-px w-10 bg-emerald-400" />
               Origin Story
             </h2>
-            <div className="space-y-4 text-slate-500">
+            <div className="space-y-4 text-slate-700">
               <p>
                 BaadFaad was born out of a simple observation during busy
                 hostels in Nepal: splitting bills after meals is awkward and
@@ -106,7 +106,7 @@ export default function AboutUs() {
                 <FaCheckCircle />
               </span>
               <h3 className="text-2xl font-bold text-slate-900">Our Mission</h3>
-              <p className="mt-3 text-slate-500">
+              <p className="mt-3 text-slate-700">
                 Remove financial awkwardness from friendships. We believe no one
                 should lose a bond over the way a bill is divided.
               </p>
@@ -117,7 +117,7 @@ export default function AboutUs() {
                 <FaCheckCircle />
               </span>
               <h3 className="text-2xl font-bold text-slate-900">Our Vision</h3>
-              <p className="mt-3 text-slate-500">
+              <p className="mt-3 text-slate-700">
                 Make every shared meal effortless in Nepal. We&apos;re building
                 the infrastructure for a seamless social economy.
               </p>
@@ -126,9 +126,9 @@ export default function AboutUs() {
 
           <section className="mt-16 text-center">
             <h2 className="text-4xl font-bold text-slate-900">
-              Meet the <span className="text-emerald-400">Minds</span>
+              Meet the <span className="text-emerald-700">Minds</span>
             </h2>
-            <p className="mt-2 text-sm text-slate-500">
+            <p className="mt-2 text-sm text-slate-700">
               The team that crafted thought into digital code.
             </p>
 
@@ -143,7 +143,7 @@ export default function AboutUs() {
                   </h3>
                   <p
                     className={`text-[11px] font-semibold tracking-wide ${
-                      index % 2 === 0 ? "text-emerald-500" : "text-violet-500"
+                      index % 2 === 0 ? "text-emerald-800" : "text-violet-700"
                     }`}
                   >
                     {member.role}

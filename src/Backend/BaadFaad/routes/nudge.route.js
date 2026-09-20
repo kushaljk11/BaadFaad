@@ -21,13 +21,15 @@ import {
   getNudgeById,
   updateNudgeStatus,
 } from "../controllers/nudge.controller.js";
+import { validate } from '../middleware/validate.middleware.js';
+import { idParams, nudgeSendBody, nudgeStatusBody, paginationQuery, summaryBody } from '../validation/schemas.js';
 
 const router = express.Router();
 
-router.post("/send", createAndSendNudge);
-router.post("/split-summary", sendSplitSummary);
-router.get("/", getAllNudges);
-router.get("/:id", getNudgeById);
-router.patch("/:id/status", updateNudgeStatus);
+router.post("/send", validate({ body: nudgeSendBody }), createAndSendNudge);
+router.post("/split-summary", validate({ body: summaryBody }), sendSplitSummary);
+router.get("/", validate({ query: paginationQuery }), getAllNudges);
+router.get("/:id", validate({ params: idParams }), getNudgeById);
+router.patch("/:id/status", validate({ params: idParams, body: nudgeStatusBody }), updateNudgeStatus);
 
 export default router;

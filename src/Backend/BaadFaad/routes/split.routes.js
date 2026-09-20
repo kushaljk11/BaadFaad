@@ -28,16 +28,18 @@ import {
   deleteSplit,
 } from '../controllers/split.controller.js';
 import { protect } from '../middleware/auth.middleware.js';
+import { validate } from '../middleware/validate.middleware.js';
+import { idParams, paginationQuery, participantIndexParams, participantPaymentBody, splitCreateBody, splitUpdateBody } from '../validation/schemas.js';
 
 const router = express.Router();
 
-router.post('/', createSplit);
-router.get('/', protect, getAllSplits);
-router.get('/:id', getSplitById);
-router.put('/:id', updateSplit);
-router.put('/:id/participant/:participantIndex', updateParticipantPayment);
-router.post('/:id/ensure-members', ensureSplitHasGroupMembers);
-router.post('/:id/finalize', protect, finalizeSplit);
-router.delete('/:id', protect, deleteSplit);
+router.post('/', validate({ body: splitCreateBody }), createSplit);
+router.get('/', protect, validate({ query: paginationQuery }), getAllSplits);
+router.get('/:id', validate({ params: idParams }), getSplitById);
+router.put('/:id', validate({ params: idParams, body: splitUpdateBody }), updateSplit);
+router.put('/:id/participant/:participantIndex', validate({ params: participantIndexParams, body: participantPaymentBody }), updateParticipantPayment);
+router.post('/:id/ensure-members', validate({ params: idParams }), ensureSplitHasGroupMembers);
+router.post('/:id/finalize', protect, validate({ params: idParams }), finalizeSplit);
+router.delete('/:id', protect, validate({ params: idParams }), deleteSplit);
 
 export default router;

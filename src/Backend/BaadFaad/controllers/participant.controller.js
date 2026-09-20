@@ -1,78 +1,78 @@
-/**
- * @file controllers/participant.controller.js
- * @description Participant CRUD controller — manages individual participant
- * records (create, list, get, update, delete).
- */
-import Participant from '../models/participant.model.js';
+import {
+  createOwnedParticipant,
+  deleteOwnedParticipant,
+  findOwnedParticipant,
+  listOwnedParticipants,
+  updateOwnedParticipant,
+} from '../repositories/participant.repository.js';
+import { paginationFrom, paginationMeta } from '../utils/pagination.js';
 
-/**
- * Create a new participant record.
- * @route POST /api/participants
- */
+function participantInput(body, { partial = false } = {}) {
+  const data = {};
+  if (!partial || body?.name !== undefined) {
+    data.name = String(body?.name ?? '').trim().slice(0, 100);
+    if (!data.name) throw new TypeError('Participant name is required');
+  }
+  if (!partial || body?.email !== undefined) {
+    data.email = String(body?.email ?? '').trim().toLowerCase().slice(0, 320);
+    if (!data.email || !data.email.includes('@')) throw new TypeError('Valid participant email is required');
+  }
+  if (!partial || body?.isHost !== undefined) data.isHost = Boolean(body?.isHost);
+  return data;
+}
+
 export const createParticipant = async (req, res, next) => {
   try {
-    const participant = await Participant.create(req.body);
-    res.status(201).json(participant);
-  } catch (err) {
-    next(err);
+    const participant = await createOwnedParticipant({
+      userId: req.user.id,
+      ...participantInput(req.body),
+    });
+    return res.status(201).json(participant);
+  } catch (error) {
+    if (error instanceof TypeError) return res.status(400).json({ message: error.message });
+    return next(error);
   }
 };
 
-/**
- * List all participants.
- * @route GET /api/participants
- */
 export const getParticipants = async (req, res, next) => {
   try {
-    const participants = await Participant.find();
-    res.json(participants);
-  } catch (err) {
-    next(err);
+    const pagination = paginationFrom(req.query);
+    const result = await listOwnedParticipants(req.user.id, { ...pagination, withMeta: true });
+    return res.json({ participants: result.items, pagination: paginationMeta(result) });
+  } catch (error) {
+    return next(error);
   }
 };
 
-/**
- * Get a single participant by MongoDB _id.
- * @route GET /api/participants/:id
- */
 export const getParticipantById = async (req, res, next) => {
   try {
-    const participant = await Participant.findById(req.params.id);
+    const participant = await findOwnedParticipant({ id: req.params.id, userId: req.user.id });
     if (!participant) return res.status(404).json({ message: 'Participant not found' });
-    res.json(participant);
-  } catch (err) { 
-    next(err);
+    return res.json(participant);
+  } catch (error) {
+    return next(error);
   }
 };
 
-/**
- * Update participant details (name, email, etc.).
- * @route PUT /api/participants/:id
- */
 export const updateParticipant = async (req, res, next) => {
   try {
-    const participant = await Participant.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true }
-    );
+    const data = participantInput(req.body, { partial: true });
+    if (Object.keys(data).length === 0) return res.status(400).json({ message: 'No supported fields provided' });
+    const participant = await updateOwnedParticipant({ id: req.params.id, userId: req.user.id, data });
     if (!participant) return res.status(404).json({ message: 'Participant not found' });
-    res.json(participant);
-  } catch (err) {
-    next(err);
+    return res.json(participant);
+  } catch (error) {
+    if (error instanceof TypeError) return res.status(400).json({ message: error.message });
+    return next(error);
   }
 };
 
-/**
- * Remove a participant record.
- * @route DELETE /api/participants/:id
- */
 export const deleteParticipant = async (req, res, next) => {
   try {
-    const participant = await Participant.findByIdAndDelete(req.params.id);
+    const participant = await deleteOwnedParticipant({ id: req.params.id, userId: req.user.id });
     if (!participant) return res.status(404).json({ message: 'Participant not found' });
-    res.json({ message: 'Participant deleted' });
-  } catch (err) {
-    next(err);
+    return res.json({ message: 'Participant deleted' });
+  } catch (error) {
+    return next(error);
   }
 };

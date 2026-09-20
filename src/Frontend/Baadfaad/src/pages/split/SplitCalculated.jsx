@@ -32,7 +32,7 @@ import khaltiLogo from "@root-assets/khalti.png";
 import api from "../../config/config";
 import toast from "react-hot-toast";
 import useSessionSocket from "../../hooks/useSessionSocket";
-import { useAuth } from "../../context/authContext";
+import { useAuth } from "../../context/authState";
 
 function statusBadge(status) {
   switch (status) {
@@ -71,7 +71,6 @@ export default function SplitCalculated() {
   const [finishing, setFinishing] = useState(false);
 
   const [split, setSplit] = useState(null);
-  const [session, setSession] = useState(null);
   const [isHost, setIsHost] = useState(false);
 
   // Table Timer state
@@ -100,8 +99,6 @@ export default function SplitCalculated() {
       try {
         if (sessionId) {
           const sessionRes = await api.get(`/session/${sessionId}`);
-          setSession(sessionRes.data);
-
           // Detect if current user is host (first participant)
           const normalizeId = (v) => {
             if (!v) return "";
@@ -121,7 +118,7 @@ export default function SplitCalculated() {
       }
     };
     fetchData();
-  }, [splitId, sessionId, fetchSplit]);
+  }, [splitId, sessionId, fetchSplit, user?._id, user?.id]);
 
   // Socket: listen for real-time navigation events (in case host pushes further)
   const onHostNavigate = useCallback(

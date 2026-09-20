@@ -11,9 +11,11 @@
  */
 import express from 'express';
 import billController from '../controllers/BillController.js';
+import { validate } from '../middleware/validate.middleware.js';
+import { billBody } from '../validation/schemas.js';
 
 const router = express.Router();
 
-router.post('/parse', billController);
+router.post('/parse', validate({ body: billBody }), billController);
 
 export default router;

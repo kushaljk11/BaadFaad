@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
-import {User} from "../models/userModel.js";
+import { findOrCreateOAuthUser } from "../repositories/user.repository.js";
 import { generateToken } from "../utils/generateToken.js";
 
 let isPassportConfigured = false;
@@ -33,21 +33,17 @@ const configurePassport = () => {
       },
       async (accessToken, refreshToken, profile, done) => {
         try {
-          let user = await User.findOne({
-            email: profile.emails[0].value,
+          const email = profile.emails?.[0]?.value;
+          if (!email) return done(new Error('Google profile did not provide an email address'), null);
+          const user = await findOrCreateOAuthUser({
+            name: profile.displayName || email.split('@')[0],
+            email,
+            image: profile.photos?.[0]?.value,
           });
-
-          if (!user) {
-            user = await User.create({
-              name: profile.displayName,
-              email: profile.emails[0].value,
-              image: profile.photos[0].value,
-            });
-          }
 
           const token = generateToken(user);
 
-          done(null, { token, user });
+          done(null, { token, user: { id: user._id, _id: user._id, name: user.name, email: user.email, image: user.image } });
         } catch (error) {
           done(error, null);
         }

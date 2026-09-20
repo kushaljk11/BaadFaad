@@ -28,17 +28,19 @@ import {
   updateGroup,
 } from '../controllers/group.controller.js';
 import { protectStrict, requireOAuthUser } from '../middleware/auth.middleware.js';
+import { validate } from '../middleware/validate.middleware.js';
+import { addMemberBody, groupCreateBody, groupIdParams, groupMemberParams, groupUpdateBody, invitationJoinBody, paginationQuery, splitIdParams } from '../validation/schemas.js';
 
 const router = express.Router();
 
-router.post('/', protectStrict, requireOAuthUser, createGroup);
-router.get('/', getGroups);
-router.get('/by-split/:splitId', getGroupBySplitId);
-router.get('/:groupId', getGroupById);
-router.patch('/:groupId', updateGroup);
-router.post('/:groupId/join', protectStrict, requireOAuthUser, joinGroup);
-router.post('/:groupId/members', addMember);
-router.delete('/:groupId/members/:userId', removeMember);
-router.delete('/:groupId', deactivateGroup);
+router.post('/', protectStrict, requireOAuthUser, validate({ body: groupCreateBody }), createGroup);
+router.get('/', validate({ query: paginationQuery }), getGroups);
+router.get('/by-split/:splitId', validate({ params: splitIdParams }), getGroupBySplitId);
+router.get('/:groupId', validate({ params: groupIdParams }), getGroupById);
+router.patch('/:groupId', validate({ params: groupIdParams, body: groupUpdateBody }), updateGroup);
+router.post('/:groupId/join', protectStrict, requireOAuthUser, validate({ params: groupIdParams, body: invitationJoinBody }), joinGroup);
+router.post('/:groupId/members', validate({ params: groupIdParams, body: addMemberBody }), addMember);
+router.delete('/:groupId/members/:userId', validate({ params: groupMemberParams }), removeMember);
+router.delete('/:groupId', validate({ params: groupIdParams }), deactivateGroup);
 
 export default router;

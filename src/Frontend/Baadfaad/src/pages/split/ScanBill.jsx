@@ -16,7 +16,7 @@ import SideBar from "../../components/layout/Dashboard/SideBar";
 import TopBar from "../../components/layout/Dashboard/TopBar";
 import { FaCloudUploadAlt, FaCamera, FaCheckCircle, FaPlusCircle, FaTrash, FaSpinner, FaLock } from "react-icons/fa";
 import api from "../../config/config";
-import { useAuth } from "../../context/authContext";
+import { useAuth } from "../../context/authState";
 import useSessionSocket, { emitItemsUpdate, emitHostNavigate } from "../../hooks/useSessionSocket";
 
 const toBase64 = (file) =>
@@ -227,7 +227,6 @@ export default function ScanBill() {
       const response = await api.post("/bills/parse", { image }, { timeout: 60000 });
       const parsed = response.data || {};
 
-      console.log("Raw API response:", parsed);
 
       const parsedItems = Array.isArray(parsed.items)
         ? parsed.items.map((item) => {
@@ -406,7 +405,7 @@ export default function ScanBill() {
       <TopBar onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)} isOpen={isMobileMenuOpen} />
       <SideBar isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
 
-      <main className="ml-0 flex-1 px-8 py-8 pt-24 md:ml-56 md:pt-8 sm:mt-10">
+      <main className="ml-0 min-w-0 flex-1 overflow-x-hidden px-4 py-8 pt-24 sm:mt-10 sm:px-8 md:ml-56 md:pt-8">
         <div className="mx-auto max-w-4xl">
           <div className="mb-6">
             <h1 className="text-3xl font-bold text-slate-900">Scan Your Bill</h1>
@@ -428,7 +427,7 @@ export default function ScanBill() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Upload Section - Host Only */}
             {isHost ? (
-            <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
+            <div className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-8">
               <label
                 htmlFor="fileUpload"
                 className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-zinc-300 bg-zinc-50 px-6 py-16 transition hover:border-emerald-400 hover:bg-emerald-50/30"
@@ -453,7 +452,7 @@ export default function ScanBill() {
 
               <div className="mt-6 flex items-center gap-4">
                 <div className="h-px flex-1 bg-zinc-200"></div>
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-600">
                   or
                 </span>
                 <div className="h-px flex-1 bg-zinc-200"></div>
@@ -574,10 +573,10 @@ export default function ScanBill() {
                         {scannedData.items.map((item, index) => (
                           <div
                             key={index}
-                            className="flex items-start justify-between text-sm"
+                            className="flex min-w-0 items-start justify-between gap-3 text-sm"
                           >
-                            <span className="text-slate-700">{item.name}</span>
-                            <span className="font-semibold text-slate-900">
+                            <span className="min-w-0 break-words text-slate-700">{item.name}</span>
+                            <span className="shrink-0 font-semibold text-slate-900">
                               NPR{item.price.toFixed(2)}
                             </span>
                           </div>
@@ -599,10 +598,10 @@ export default function ScanBill() {
                         {manualItems.map((item, index) => (
                           <div
                             key={index}
-                            className="flex items-start justify-between text-sm"
+                            className="flex min-w-0 items-start justify-between gap-3 text-sm"
                           >
-                            <span className="text-slate-700">{item.name}</span>
-                            <span className="font-semibold text-slate-900">
+                            <span className="min-w-0 break-words text-slate-700">{item.name}</span>
+                            <span className="shrink-0 font-semibold text-slate-900">
                               NPR{item.price.toFixed(2)}
                             </span>
                           </div>
@@ -628,20 +627,21 @@ export default function ScanBill() {
 
           {/* Manual Entry Section - Host Only */}
           {isHost ? (
-          <div className="mt-6 rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
+          <div className="mt-6 rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-8">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-xl font-bold text-slate-900">Add Items Manually</h2>
-              <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-600">
+              <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">
                 OPTIONAL
               </span>
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
               <div className="md:col-span-5">
-                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                <label htmlFor="manualItemName" className="mb-2 block text-sm font-semibold text-slate-700">
                   Item Name
                 </label>
                 <input
+                  id="manualItemName"
                   type="text"
                   value={itemName}
                   onChange={(e) => setItemName(e.target.value)}
@@ -651,10 +651,11 @@ export default function ScanBill() {
               </div>
 
               <div className="md:col-span-3">
-                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                <label htmlFor="manualItemAssignees" className="mb-2 block text-sm font-semibold text-slate-700">
                   Assign To
                 </label>
                 <select
+                  id="manualItemAssignees"
                   multiple
                   value={itemAssigned}
                   onChange={(e) => {
@@ -667,14 +668,15 @@ export default function ScanBill() {
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
-                <p className="mt-1 text-xs text-slate-400">Hold Ctrl/Cmd to select multiple</p>
+                <p className="mt-1 text-xs text-slate-600">Hold Ctrl/Cmd to select multiple</p>
               </div>
 
               <div className="md:col-span-3">
-                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                <label htmlFor="manualItemQuantity" className="mb-2 block text-sm font-semibold text-slate-700">
                   Quantity
                 </label>
                 <input
+                  id="manualItemQuantity"
                   type="number"
                   value={itemQuantity}
                   onChange={(e) => setItemQuantity(e.target.value)}
@@ -685,10 +687,11 @@ export default function ScanBill() {
               </div>
 
               <div className="md:col-span-3">
-                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                <label htmlFor="manualItemPrice" className="mb-2 block text-sm font-semibold text-slate-700">
                   Price (NPR)
                 </label>
                 <input
+                  id="manualItemPrice"
                   type="number"
                   value={itemPrice}
                   onChange={(e) => setItemPrice(e.target.value)}
@@ -703,8 +706,9 @@ export default function ScanBill() {
                 <button
                   type="button"
                   onClick={handleAddManualItem}
-                  className="flex h-12 w-full items-center justify-center rounded-xl bg-emerald-400 text-white transition hover:bg-emerald-500"
+                  className="flex h-12 w-full items-center justify-center rounded-xl bg-emerald-400 text-slate-950 transition hover:bg-emerald-300"
                   title="Add Item"
+                  aria-label="Add item"
                 >
                   <FaPlusCircle className="text-xl" />
                 </button>
@@ -717,9 +721,9 @@ export default function ScanBill() {
                 {manualItems.map((item, index) => (
                   <div
                     key={index}
-                    className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3"
+                    className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3"
                   >
-                    <div className="flex-1">
+                    <div className="min-w-0 flex-1">
                       <span className="text-sm font-medium text-slate-900">{item.name}</span>
                       <span className="ml-2 text-xs text-slate-500">
                         (NPR{item.unitPrice.toFixed(2)} each)

@@ -1,265 +1,95 @@
-/**
- * @file controllers/nudge.controller.js
- * @description Nudge controller — creates payment reminder nudges, sends
- * branded HTML emails to recipients, and exposes CRUD + split-summary endpoints.
- */
-import Nudge from "../models/nudge.model.js";
-import { sendEmail } from "../config/mail.js";
-import createNudgeTemplate from "../templates/nudge.templates.js";
-import createSplitSummaryTemplate from "../templates/splitSummary.templates.js";
+import { sendEmail } from '../config/mail.js';
+import createNudgeTemplate from '../templates/nudge.templates.js';
+import createSplitSummaryTemplate from '../templates/splitSummary.templates.js';
+import {
+  getOwnedNudge,
+  getOwnedSplitSummary,
+  listOwnedNudges,
+  reserveNudge,
+  setNudgeDelivery,
+} from '../repositories/nudge.repository.js';
+import { paginationFrom, paginationMeta } from '../utils/pagination.js';
 
-/**
- * Create a nudge record and send a reminder email to the recipient.
- * @route POST /api/nudge/send
- * @param {import('express').Request} req
- * @param {import('express').Response} res
- */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export const createAndSendNudge = async (req, res) => {
+  const splitParticipantId = req.body?.splitParticipantId;
+  if (!UUID.test(String(splitParticipantId || ''))) return res.status(400).json({ message: 'Valid splitParticipantId is required' });
   try {
-    const {
-      recipientName,
-      recipientEmail,
-      senderName,
-      groupName,
-      amount,
-      currency,
-      dueDate,
-      payLink,
-    } = req.body;
-
-    if (!recipientName || !recipientEmail || !senderName || !groupName || amount === undefined) {
-      return res.status(400).json({
-        message: "recipientName, recipientEmail, senderName, groupName and amount are required",
-      });
-    }
-
-    if (Number(amount) <= 0) {
-      return res.status(400).json({
-        message: "Amount must be greater than 0 to send a nudge",
-      });
-    }
-
-    const template = createNudgeTemplate({
-      recipientName,
-      senderName,
-      groupName,
-      amount,
-      currency,
-      dueDate,
-      payLink,
+    const result = await reserveNudge({
+      senderId: req.user.id, splitParticipantId, currency: req.body?.currency,
+      dueDate: req.body?.dueDate, payLink: req.body?.payLink,
     });
-
-    let status = "sent";
-    let errorMessage = null;
-    let mailCode = 200;
-    let mailDetails = null;
-    let mailProvider = null;
-
+    if (result.status === 'not-found') return res.status(404).json({ message: 'Split participant not found' });
+    if (result.status === 'forbidden') return res.status(403).json({ message: 'You are not allowed to nudge this participant' });
+    if (result.status === 'settled') return res.status(409).json({ message: 'This participant has no outstanding balance' });
+    if (result.status === 'throttled') {
+      res.set('Retry-After', String(result.retryAfterSeconds));
+      return res.status(429).json({ message: 'A recent nudge already exists', retryAfterSeconds: result.retryAfterSeconds });
+    }
+    const nudge = result.nudge;
+    if (!nudge.recipientEmail) {
+      await setNudgeDelivery({ id: nudge.id, senderId: req.user.id, status: 'failed', errorMessage: 'Recipient has no email address' });
+      return res.status(400).json({ success: false, delivered: false, message: 'Recipient has no email address' });
+    }
+    const template = createNudgeTemplate(nudge);
     try {
-      const mailResult = await sendEmail({
-        to: recipientEmail,
-        subject: template.subject,
-        text: template.text,
-        html: template.html,
-      });
-      mailProvider = mailResult?.provider || null;
-    } catch (mailError) {
-      status = "failed";
-      errorMessage = mailError?.message || "Mailjet send failed";
-      mailCode = mailError?.statusCode || 502;
-      mailDetails = mailError?.details || null;
-      mailProvider = mailError?.provider || null;
+      const mail = await sendEmail({ to: nudge.recipientEmail, subject: template.subject, text: template.text, html: template.html });
+      const saved = await setNudgeDelivery({ id: nudge.id, senderId: req.user.id, status: 'sent' });
+      return res.status(201).json({ success: true, delivered: true, message: 'Nudge sent successfully', provider: mail?.provider || null, nudge: saved });
+    } catch (error) {
+      const saved = await setNudgeDelivery({ id: nudge.id, senderId: req.user.id, status: 'failed', errorMessage: String(error?.message || 'Mail delivery failed').slice(0, 500) });
+      return res.status(502).json({ success: false, delivered: false, message: 'Nudge saved, but email delivery failed', nudge: saved });
     }
-
-    const nudge = await Nudge.create({
-      recipientName,
-      recipientEmail,
-      senderName,
-      groupName,
-      amount,
-      currency,
-      dueDate,
-      payLink,
-      status,
-      errorMessage,
-    });
-
-    if (status === "failed") {
-      const isTimeout = typeof errorMessage === "string" && errorMessage.toLowerCase().includes("timeout");
-      return res.status(mailCode).json({
-        success: false,
-        delivered: false,
-        message: isTimeout
-          ? "Nudge saved, but email sending failed: provider timed out or is unreachable"
-          : `Nudge saved, but email sending failed: ${errorMessage || "Mail provider error"}`,
-        error: errorMessage,
-        provider: mailProvider,
-        details: mailDetails,
-        nudge,
-      });
-    }
-
-    return res.status(201).json({
-      success: true,
-      delivered: true,
-      message: "Nudge sent successfully",
-      provider: mailProvider,
-      nudge,
-    });
   } catch (error) {
-    return res.status(500).json({
-      message: "Failed to create nudge",
-      error: error?.message || "Unknown error",
-      details: error?.details || null,
-    });
+    console.error('Nudge creation failed:', error);
+    return res.status(500).json({ message: 'Failed to create nudge' });
   }
 };
 
-/**
- * List all nudges, newest first.
- * @route GET /api/nudge
- */
-export const getAllNudges = async (_req, res) => {
+export const getAllNudges = async (req, res) => {
   try {
-    const nudges = await Nudge.find().sort({ createdAt: -1 });
-    return res.status(200).json(nudges);
-  } catch (error) {
-    return res.status(500).json({ message: "Failed to fetch nudges", error: error.message });
+    const pagination = paginationFrom(req.query);
+    const result = await listOwnedNudges(req.user.id, { ...pagination, withMeta: true });
+    return res.json({ nudges: result.items, pagination: paginationMeta(result) });
   }
+  catch (error) { console.error('Nudge list failed:', error); return res.status(500).json({ message: 'Failed to fetch nudges' }); }
 };
 
-/**
- * Get a single nudge by MongoDB _id.
- * @route GET /api/nudge/:id
- */
 export const getNudgeById = async (req, res) => {
-  try {
-    const nudge = await Nudge.findById(req.params.id);
-
-    if (!nudge) {
-      return res.status(404).json({ message: "Nudge not found" });
-    }
-
-    return res.status(200).json(nudge);
-  } catch (error) {
-    return res.status(500).json({ message: "Failed to fetch nudge", error: error.message });
-  }
+  if (!UUID.test(req.params.id)) return res.status(400).json({ message: 'Invalid nudge id' });
+  const nudge = await getOwnedNudge(req.params.id, req.user.id);
+  return nudge ? res.json(nudge) : res.status(404).json({ message: 'Nudge not found' });
 };
 
-/**
- * POST /nudge/split-summary
- * Sends a detailed split-summary email to every participant in the breakdown.
- * Body: { groupName, totalAmount, breakdown: [{ name, email, share, amountPaid, balanceDue }] }
- */
 export const sendSplitSummary = async (req, res) => {
+  const splitId = req.body?.splitId;
+  if (!UUID.test(String(splitId || ''))) return res.status(400).json({ message: 'Valid splitId is required' });
   try {
-    const { groupName, totalAmount, breakdown } = req.body;
-
-    if (!breakdown || !Array.isArray(breakdown) || breakdown.length === 0) {
-      return res.status(400).json({ message: "breakdown array is required" });
-    }
-
-    const participantCount = breakdown.length;
-    const allParticipants = breakdown.map((b) => ({
-      name: b.name || "Participant",
-      share: b.share || 0,
-      amountPaid: b.amountPaid || 0,
-      balanceDue: b.balanceDue || 0,
-    }));
-
-    const recipients = breakdown.filter((b) => Boolean(String(b?.email || "").trim()));
-    const jobs = recipients.map(async (b) => {
+    const summary = await getOwnedSplitSummary(splitId, req.user.id);
+    if (!summary) return res.status(404).json({ message: 'Split not found' });
+    const recipients = summary.breakdown.filter((row) => row.email);
+    const settled = await Promise.allSettled(recipients.map(async (recipient) => {
       const template = createSplitSummaryTemplate({
-        recipientName: b.name || "Friend",
-        groupName: groupName || "Split",
-        totalAmount: totalAmount || 0,
-        participantCount,
-        recipientShare: b.share || 0,
-        recipientPaid: b.amountPaid || 0,
-        recipientDue: b.balanceDue || 0,
-        participants: allParticipants,
+        recipientName: recipient.name, groupName: summary.groupName, totalAmount: summary.totalAmount,
+        participantCount: summary.breakdown.length, recipientShare: recipient.share,
+        recipientPaid: recipient.amountPaid, recipientDue: recipient.balanceDue, participants: summary.breakdown,
       });
-
-      try {
-        const result = await sendEmail({
-          to: b.email,
-          subject: template.subject,
-          text: template.text,
-          html: template.html,
-        });
-
-        return {
-          email: b.email,
-          provider: result?.provider || null,
-        };
-      } catch (mailError) {
-        mailError.details = {
-          ...(mailError?.details || {}),
-          email: b.email,
-        };
-        throw mailError;
-      }
-    });
-
-    const settled = await Promise.allSettled(jobs);
-    let sent = 0;
-    let failed = 0;
-    const failures = [];
-
-    for (const item of settled) {
-      if (item.status === "fulfilled") {
-        sent++;
-        continue;
-      }
-
-      failed++;
-      const reason = item.reason || {};
-      failures.push({
-        email: reason?.details?.email || null,
-        error: reason?.message || "Email send failed",
-        status: reason?.statusCode || null,
-        code: reason?.code || null,
-        provider: reason?.provider || null,
-      });
-    }
-
-    return res.status(failed > 0 ? 207 : 200).json({
-      message: failed > 0 ? "Summary emails processed with some failures" : "Summary emails processed",
-      sent,
-      failed,
-      totalRecipients: recipients.length,
-      failures,
-    });
+      const result = await sendEmail({ to: recipient.email, subject: template.subject, text: template.text, html: template.html });
+      return { email: recipient.email, provider: result?.provider || null };
+    }));
+    const failures = settled.flatMap((item, index) => item.status === 'rejected' ? [{ email: recipients[index].email, error: 'Email delivery failed' }] : []);
+    const sent = settled.length - failures.length;
+    return res.status(failures.length ? 207 : 200).json({ message: failures.length ? 'Summary emails processed with some failures' : 'Summary emails processed', sent, failed: failures.length, totalRecipients: recipients.length, failures });
   } catch (error) {
-    return res.status(500).json({ message: "Failed to send split summary", error: error.message });
+    console.error('Split summary failed:', error);
+    return res.status(500).json({ message: 'Failed to send split summary' });
   }
 };
 
-/**
- * Update the delivery status of a nudge.
- * @route PATCH /api/nudge/:id/status
- * @param {import('express').Request} req - body: { status: 'sent'|'failed'|'pending' }
- */
 export const updateNudgeStatus = async (req, res) => {
-  try {
-    const { status } = req.body;
-
-    if (!status) {
-      return res.status(400).json({ message: "status is required" });
-    }
-
-    const nudge = await Nudge.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true, runValidators: true }
-    );
-
-    if (!nudge) {
-      return res.status(404).json({ message: "Nudge not found" });
-    }
-
-    return res.status(200).json({ message: "Nudge status updated", nudge });
-  } catch (error) {
-    return res.status(500).json({ message: "Failed to update nudge", error: error.message });
-  }
+  const status = String(req.body?.status || '').toLowerCase();
+  if (!['pending', 'sent', 'failed', 'acknowledged'].includes(status)) return res.status(400).json({ message: 'Invalid status' });
+  const nudge = await setNudgeDelivery({ id: req.params.id, senderId: req.user.id, status });
+  return nudge ? res.json({ message: 'Nudge status updated', nudge }) : res.status(404).json({ message: 'Nudge not found' });
 };

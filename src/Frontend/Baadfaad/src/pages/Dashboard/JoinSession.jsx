@@ -47,23 +47,24 @@ export default function JoinSession() {
       const splitId = url.searchParams.get("splitId");
       const sessionId = url.searchParams.get("sessionId");
       const groupId = url.searchParams.get("groupId");
+      const inviteToken = url.searchParams.get("invite");
       const type = String(url.searchParams.get("type") || "session").toLowerCase();
 
       if (groupId || type === "group") {
-        if (!groupId || !splitId) {
+        if (!groupId || !splitId || !inviteToken) {
           toast.error("Invalid group link. Please check and try again.");
           return;
         }
-        navigate(`/group/join?groupId=${encodeURIComponent(groupId)}&splitId=${encodeURIComponent(splitId)}&type=group`);
+        navigate(`/group/join?groupId=${encodeURIComponent(groupId)}&splitId=${encodeURIComponent(splitId)}&type=group&invite=${encodeURIComponent(inviteToken)}`);
         return;
       }
 
-      if (!splitId || !sessionId) {
+      if (!splitId || !sessionId || !inviteToken) {
         toast.error("Invalid session link. Please check the link and try again.");
         return;
       }
 
-      navigate(`/session/join?splitId=${encodeURIComponent(splitId)}&sessionId=${encodeURIComponent(sessionId)}&type=session`);
+      navigate(`/session/join?splitId=${encodeURIComponent(splitId)}&sessionId=${encodeURIComponent(sessionId)}&type=session&invite=${encodeURIComponent(inviteToken)}`);
     } catch (err) {
       toast.error("Invalid link format. Please paste a valid session link.");
     }
@@ -226,6 +227,8 @@ export default function JoinSession() {
     }
 
     return () => stopScanner();
+  // Scanner callbacks intentionally restart only when the dialog opens/closes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scannerOpen]);
 
   return (

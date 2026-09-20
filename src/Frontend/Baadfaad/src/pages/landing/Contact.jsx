@@ -60,17 +60,17 @@ export default function Contact() {
 
         <main className="grid flex-1 grid-cols-1 items-center gap-10 py-14 lg:grid-cols-[1fr_1fr]">
           <section>
-            <span className="inline-flex rounded-full bg-emerald-100 px-4 py-1 text-xs font-bold tracking-wider text-emerald-500">
+            <span className="inline-flex rounded-full bg-emerald-100 px-4 py-1 text-xs font-bold tracking-wider text-emerald-800">
               GET IN TOUCH
             </span>
 
             <h1 className="mt-6 text-6xl font-bold leading-tight text-slate-950">
               Let&apos;s talk
               <br />
-              <span className="text-emerald-400">asap.</span>
+              <span className="text-emerald-700">asap.</span>
             </h1>
 
-            <p className="mt-6 max-w-md text-2xl leading-relaxed text-slate-500">
+            <p className="mt-6 max-w-md text-2xl leading-relaxed text-slate-700">
               Have a burning question or just want to say hi? We&apos;re all
               ears and ready to help you level up.
             </p>
@@ -84,10 +84,10 @@ export default function Contact() {
                   <FaWhatsapp />
                 </span>
                 <span>
-                  <span className="block text-xs font-bold tracking-wide text-emerald-900/70">
+                  <span className="block text-xs font-bold tracking-wide text-slate-950">
                     DIRECT LINE
                   </span>
-                  <span className="text-3xl font-bold text-white">
+                  <span className="text-3xl font-bold text-slate-950">
                     Ping us on WhatsApp
                   </span>
                 </span>
@@ -100,7 +100,7 @@ export default function Contact() {
                 <FaEnvelope />
               </span>
               <span>
-                <span className="block text-xs font-bold tracking-wide text-slate-400">
+                <span className="block text-xs font-bold tracking-wide text-slate-600">
                   EMAIL SUPPORT
                 </span>
                 <span className="text-2xl font-semibold text-slate-900">
@@ -110,23 +110,26 @@ export default function Contact() {
             </div>
 
             <div className="mt-10 flex items-center gap-4">
-              <p className="text-xs font-bold tracking-[0.2em] text-slate-400">
+              <p className="text-xs font-bold tracking-[0.2em] text-slate-600">
                 FOLLOW US
               </p>
               <button
                 type="button"
+                aria-label="Email"
                 className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-600"
               >
                 <FaAt className="text-xs" />
               </button>
               <button
                 type="button"
+                aria-label="Previous social link"
                 className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-600"
               >
                 <FaArrowRight className="rotate-180 text-xs" />
               </button>
               <button
                 type="button"
+                aria-label="Instagram"
                 className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-600"
               >
                 <FaInstagram className="text-xs" />
@@ -199,7 +202,7 @@ export default function Contact() {
             </form>
             )}
 
-            <p className="mt-6 text-center text-xs font-medium text-slate-400">
+            <p className="mt-6 text-center text-xs font-medium text-slate-600">
               Average response time: &lt; 2 hours
             </p>
           </section>

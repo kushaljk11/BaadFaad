@@ -33,10 +33,15 @@ export const getMailHealth = async (_req, res) => {
  */
 export const sendTestMail = async (req, res) => {
   try {
+    const contactRecipient = process.env.CONTACT_EMAIL || process.env.MAIL_FROM_EMAIL;
+    if (!contactRecipient) return res.status(503).json({ message: 'Contact email is not configured' });
+    const subject = String(req.body?.subject || 'Contact from BaadFaad').replace(/[\r\n]+/g, ' ').slice(0, 200);
+    const text = String(req.body?.text || '').slice(0, 10_000);
+    if (!text.trim()) return res.status(400).json({ message: 'Message text is required' });
     const info = await sendEmail({
-      to: req.body.to,
-      subject: req.body.subject || "Test Email from BaadFaad",
-      text: req.body.text || "Hello! BaadFaad mail setup is working.",
+      to: contactRecipient,
+      subject,
+      text,
     });
     return res.status(200).json({ message: "Email sent", info });
   } catch (error) {

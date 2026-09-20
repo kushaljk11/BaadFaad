@@ -1,543 +1,144 @@
-/**
- * @file controllers/group.controller.js
- * @description Group controller — CRUD operations for persistent expense-sharing
- * groups. Supports QR-based joining, member management, and soft-deactivation.
- */
-import mongoose from 'mongoose';
+import { randomUUID } from 'node:crypto';
 import QRCode from 'qrcode';
-import Group from '../models/group.model.js';
-import Split from '../models/split.model.js';
 import { getIO } from '../config/socket.js';
+import {
+  addGroupMember,
+  createGroupRecord,
+  findGroupForUser,
+  listGroupsForUser,
+  recalculateGroupSplit,
+  removeGroupMember,
+  updateOwnedGroup,
+} from '../repositories/group.repository.js';
+import { paginationFrom, paginationMeta } from '../utils/pagination.js';
+import { createInvitationToken } from '../utils/invitation.js';
 
-const QR_BASE_URL =
-  process.env.QR_BASE_URL ||
-  (process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',')[0].trim() : '') ||
-  'https://baadfaad.vercel.app';
-
-// Predefined set of group cover images
-const GROUP_COVER_IMAGES = [
+const QR_BASE_URL = process.env.QR_BASE_URL
+  || (process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',')[0].trim() : '')
+  || 'https://baadfaad.vercel.app';
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const COVERS = [
   'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400&h=200&fit=crop',
-  'https://images.unsplash.com/photo-1556742111-a301076d9d18?w=400&h=200&fit=crop',
   'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&h=200&fit=crop',
-  'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&h=200&fit=crop',
   'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=200&fit=crop',
-  'https://images.unsplash.com/photo-1476224203421-9ac39bcb3327?w=400&h=200&fit=crop',
-  'https://images.unsplash.com/photo-1530062845289-9109b2c9c868?w=400&h=200&fit=crop',
-  'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=400&h=200&fit=crop',
-  'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=400&h=200&fit=crop',
-  'https://images.unsplash.com/photo-1528605248644-14dd04022da1?w=400&h=200&fit=crop',
 ];
 
-const getRandomCoverImage = () => GROUP_COVER_IMAGES[Math.floor(Math.random() * GROUP_COVER_IMAGES.length)];
-
-const sendError = (res, statusCode, message, details = null) => {
-  return res.status(statusCode).json({
-    success: false,
-    message,
-    ...(details ? { details } : {}),
-  });
+const error = (res, status, message) => res.status(status).json({ success: false, message });
+const validUuid = (value) => UUID.test(String(value ?? ''));
+const emit = (room, event, payload) => {
+  try { getIO().to(String(room)).emit(event, payload); } catch { /* socket is non-critical */ }
 };
 
-const isValidObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
-const toObjectIdString = (value) => {
-  if (!value) return '';
-  if (typeof value === 'string') return value;
-  if (typeof value === 'object' && value._id) return String(value._id);
-  return String(value);
-};
-
-const formatMongooseError = (error) => {
-  if (error?.code === 11000) {
-    const duplicateField = Object.keys(error.keyPattern || {})[0] || 'field';
-    return {
-      statusCode: 409,
-      message: `${duplicateField} already exists`,
-    };
-  }
-
-  if (error?.name === 'ValidationError') {
-    const details = Object.values(error.errors).map((validationError) => validationError.message);
-    return {
-      statusCode: 400,
-      message: 'Validation failed',
-      details,
-    };
-  }
-
-  if (error?.name === 'CastError') {
-    return {
-      statusCode: 400,
-      message: 'Invalid request data',
-    };
-  }
-
-  return {
-    statusCode: 500,
-    message: 'Internal server error',
-  };
-};
-
-/**
- * Generates a QR code as Base64 data URL.
- * @param {string} data - URL or text to encode in QR
- * @returns {Promise<string>} Base64 QR code string
- */
-const generateQRCode = async (data) => {
-  try {
-    const qrCodeDataURL = await QRCode.toDataURL(data, {
-      errorCorrectionLevel: 'M',
-      type: 'image/png',
-      margin: 1,
-      width: 300,
-    });
-    return qrCodeDataURL;
-  } catch (error) {
-    throw new Error(`QR code generation failed: ${error.message}`);
-  }
-};
-
-/**
- * Creates a new group with QR code generation.
- * POST /api/groups
- * Body: { name, description?, createdBy, members?, defaultCurrency? }
- */
 export const createGroup = async (req, res) => {
   try {
-    const { name, description, members, defaultCurrency, splitId, sessionId } = req.body;
-    const createdBy = req.authUser?._id || req.user?.id || req.body.createdBy;
-
-    if (!name || !createdBy) {
-      return sendError(res, 400, 'name and createdBy are required');
-    }
-
-    if (!isValidObjectId(createdBy)) {
-      return sendError(res, 400, 'Invalid createdBy userId');
-    }
-
-    // Validate members array if provided
-    if (members && Array.isArray(members)) {
-      for (const memberId of members) {
-        if (!isValidObjectId(memberId)) {
-          return sendError(res, 400, `Invalid member userId: ${memberId}`);
-        }
-      }
-    }
-
-    // Ensure creator is in members list
-    const membersList = members && Array.isArray(members) ? [...new Set([createdBy, ...members])] : [createdBy];
-
-    // Create group without QR first to get _id
-    const group = await Group.create({
+    const createdBy = req.user.id;
+    const name = String(req.body?.name ?? '').trim().slice(0, 100);
+    if (!name) return error(res, 400, 'Group name is required');
+    const memberIds = Array.isArray(req.body?.members) ? req.body.members : [];
+    if (memberIds.some((id) => !validUuid(id))) return error(res, 400, 'Invalid member userId');
+    const id = randomUUID();
+    const splitId = req.body?.splitId || null;
+    const invitation = createInvitationToken();
+    const joinUrl = `${QR_BASE_URL.replace(/\/$/, '')}/group/join?groupId=${id}&splitId=${splitId || ''}&invite=${invitation.token}`;
+    const qrCode = await QRCode.toDataURL(joinUrl, { errorCorrectionLevel: 'M', type: 'image/png', margin: 1, width: 300 });
+    const group = await createGroupRecord({
+      id,
       name,
-      description,
+      description: String(req.body?.description ?? '').trim().slice(0, 500),
       createdBy,
-      members: membersList,
-      defaultCurrency,
-      image: getRandomCoverImage(),
-      splitId: splitId || null,
-      sessionId: sessionId || null,
+      memberIds,
+      defaultCurrency: String(req.body?.defaultCurrency || 'NPR').toUpperCase().slice(0, 3),
+      image: COVERS[Math.floor(Math.random() * COVERS.length)],
+      splitId,
+      sessionId: req.body?.sessionId || null,
+      qrCode,
+      invitation: {
+        tokenHash: invitation.tokenHash,
+        expiresAt: new Date(Date.now() + Math.min(365, Math.max(1, Number(process.env.GROUP_INVITE_DURATION_DAYS) || 30)) * 86400000),
+      },
     });
-
-    // Generate QR code with explicit group join path
-    const joinUrl = `${QR_BASE_URL}/group/join?groupId=${group._id}&splitId=${group.splitId || ''}`;
-    const qrCodeBase64 = await generateQRCode(joinUrl);
-
-    // Update group with QR code
-    group.qrCode = qrCodeBase64;
-    await group.save();
-
-    // Populate before returning
-    await group.populate('createdBy', 'fullName email avatarUrl');
-    await group.populate('members', 'fullName email avatarUrl');
-
-    return res.status(201).json({
-      success: true,
-      message: 'Group created successfully with QR code',
-      data: group.toJSON(),
-    });
-  } catch (error) {
-    const formattedError = formatMongooseError(error);
-    return sendError(res, formattedError.statusCode, formattedError.message, formattedError.details);
+    return res.status(201).json({ success: true, message: 'Group created successfully with QR code', data: group, inviteUrl: joinUrl });
+  } catch (cause) {
+    console.error('Create group failed:', cause);
+    return error(res, cause?.code === 'P2003' ? 400 : 500, cause?.code === 'P2003' ? 'A referenced user or split does not exist' : 'Internal server error');
   }
 };
 
-/**
- * Returns all groups ordered by newest first.
- * GET /api/groups
- */
 export const getGroups = async (req, res) => {
   try {
-    // If createdBy query param is provided, only return groups created by that user (host-only view)
-    const filter = {};
-    if (req.query.createdBy && isValidObjectId(req.query.createdBy)) {
-      filter.createdBy = req.query.createdBy;
-    }
-
-    const groups = await Group.find(filter)
-      .populate('createdBy', 'fullName email avatarUrl')
-      .populate('members', 'fullName email avatarUrl')
-      .sort({ createdAt: -1 })
-      .lean();
-
-    return res.status(200).json({
-      success: true,
-      count: groups.length,
-      data: groups,
-    });
-  } catch (error) {
-    const formattedError = formatMongooseError(error);
-    return sendError(res, formattedError.statusCode, formattedError.message);
+    const paging = paginationFrom(req.query);
+    const result = await listGroupsForUser(req.user.id, { ...paging, withMeta: true });
+    return res.json({ success: true, count: result.items.length, data: result.items, pagination: paginationMeta(result) });
+  } catch (cause) {
+    console.error('List groups failed:', cause);
+    return error(res, 500, 'Internal server error');
   }
 };
 
-/**
- * Returns one group by id with populated members.
- * GET /api/groups/:groupId
- */
 export const getGroupById = async (req, res) => {
-  try {
-    const { groupId } = req.params;
-
-    if (!isValidObjectId(groupId)) {
-      return sendError(res, 400, 'Invalid groupId');
-    }
-
-    const group = await Group.findById(groupId)
-      .populate('createdBy', 'fullName email avatarUrl')
-      .populate('members', 'fullName email avatarUrl')
-      .lean();
-
-    if (!group) {
-      return sendError(res, 404, 'Group not found');
-    }
-
-    return res.status(200).json({
-      success: true,
-      data: group,
-    });
-  } catch (error) {
-    const formattedError = formatMongooseError(error);
-    return sendError(res, formattedError.statusCode, formattedError.message);
-  }
+  if (!validUuid(req.params.groupId)) return error(res, 400, 'Invalid groupId');
+  const group = await findGroupForUser({ id: req.params.groupId, userId: req.user.id });
+  return group ? res.json({ success: true, data: group }) : error(res, 404, 'Group not found');
 };
 
-/**
- * Get a group by its associated splitId.
- * GET /api/groups/by-split/:splitId
- */
 export const getGroupBySplitId = async (req, res) => {
-  try {
-    const { splitId } = req.params;
-
-    if (!isValidObjectId(splitId)) {
-      return sendError(res, 400, 'Invalid splitId');
-    }
-
-    const group = await Group.findOne({ splitId })
-      .populate('createdBy', 'fullName email avatarUrl')
-      .populate('members', 'fullName email avatarUrl')
-      .lean();
-
-    if (!group) {
-      return sendError(res, 404, 'Group not found for this split');
-    }
-
-    return res.status(200).json({ success: true, data: group });
-  } catch (error) {
-    const formattedError = formatMongooseError(error);
-    return sendError(res, formattedError.statusCode, formattedError.message);
-  }
+  if (!validUuid(req.params.splitId)) return error(res, 400, 'Invalid splitId');
+  const group = await findGroupForUser({ splitId: req.params.splitId, userId: req.user.id });
+  return group ? res.json({ success: true, data: group }) : error(res, 404, 'Group not found for this split');
 };
 
-/**
- * Updates group details (name, description, defaultCurrency).
- * PATCH /api/groups/:groupId
- */
 export const updateGroup = async (req, res) => {
-  try {
-    const { groupId } = req.params;
-    const { name, description, defaultCurrency } = req.body;
-
-    if (!isValidObjectId(groupId)) {
-      return sendError(res, 400, 'Invalid groupId');
-    }
-
-    const updateData = {};
-    if (name !== undefined) updateData.name = name;
-    if (description !== undefined) updateData.description = description;
-    if (defaultCurrency !== undefined) updateData.defaultCurrency = defaultCurrency;
-
-    if (Object.keys(updateData).length === 0) {
-      return sendError(res, 400, 'No valid fields provided for update');
-    }
-
-    const group = await Group.findByIdAndUpdate(groupId, updateData, {
-      new: true,
-      runValidators: true,
-    })
-      .populate('createdBy', 'fullName email avatarUrl')
-      .populate('members', 'fullName email avatarUrl')
-      .lean();
-
-    if (!group) {
-      return sendError(res, 404, 'Group not found');
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: 'Group updated successfully',
-      data: group,
-    });
-  } catch (error) {
-    const formattedError = formatMongooseError(error);
-    return sendError(res, formattedError.statusCode, formattedError.message, formattedError.details);
-  }
+  if (!validUuid(req.params.groupId)) return error(res, 400, 'Invalid groupId');
+  const data = {};
+  if (req.body?.name !== undefined) data.name = String(req.body.name).trim().slice(0, 100);
+  if (req.body?.description !== undefined) data.description = String(req.body.description).trim().slice(0, 500);
+  if (req.body?.defaultCurrency !== undefined) data.defaultCurrency = String(req.body.defaultCurrency).toUpperCase().slice(0, 3);
+  if (!Object.keys(data).length || ('name' in data && !data.name)) return error(res, 400, 'No valid fields provided for update');
+  const group = await updateOwnedGroup({ id: req.params.groupId, ownerId: req.user.id, data });
+  return group ? res.json({ success: true, message: 'Group updated successfully', data: group }) : error(res, 404, 'Group not found');
 };
 
-/**
- * Public endpoint for joining a group via QR code
- * POST /api/groups/:groupId/join
- * Body: { userId?, name?, email? }
- */
 export const joinGroup = async (req, res) => {
+  const { groupId } = req.params;
+  if (!validUuid(groupId)) return error(res, 400, 'Invalid groupId');
   try {
-    const { groupId } = req.params;
-    const userId = req.authUser?._id || req.user?.id || req.body.userId;
-
-    if (!isValidObjectId(groupId)) {
-      return sendError(res, 400, 'Invalid groupId');
-    }
-
-    const group = await Group.findById(groupId);
-
-    if (!group) {
-      return sendError(res, 404, 'Group not found');
-    }
-
-    if (!group.isActive) {
-      return sendError(res, 400, 'Group is not active');
-    }
-
-    // Self-heal historical duplicate member entries.
-    const uniqueMemberIds = [...new Set(group.members.map((m) => toObjectIdString(m)).filter(Boolean))];
-    if (uniqueMemberIds.length !== group.members.length) {
-      group.members = uniqueMemberIds;
-      await group.save();
-    }
-
-    const memberIdToAdd = userId;
-
-    if (!memberIdToAdd || !isValidObjectId(memberIdToAdd)) {
-      return sendError(res, 400, 'Valid userId is required');
-    }
-
-    const alreadyMember = group.members.some((m) => toObjectIdString(m) === String(memberIdToAdd));
-
-    const updatedGroup = await Group.findByIdAndUpdate(
-      groupId,
-      { $addToSet: { members: memberIdToAdd } },
-      { new: true }
-    )
-      .populate('createdBy', 'fullName email avatarUrl')
-      .populate('members', 'fullName email avatarUrl');
-
-    if (!updatedGroup) {
-      return sendError(res, 404, 'Group not found');
-    }
-
-    // Emit a socket event so clients in the group's room see live joins
-    try {
-      const io = getIO();
-      const newMember = updatedGroup.members.find((m) => String(m._id) === String(memberIdToAdd));
-      io.to(String(group._id)).emit('participant-joined', {
-        participants: updatedGroup.members,
-        newParticipant: newMember || { _id: memberIdToAdd },
-      });
-    } catch (e) {
-      // Non-fatal: if socket isn't initialized, continue silently
-      console.warn('Socket emit for group join failed:', e && e.message);
-    }
-
-    // If this group is associated to a split, attempt to recalculate the split breakdown
-    try {
-      if (updatedGroup.splitId) {
-        const split = await Split.findById(updatedGroup.splitId);
-        if (split) {
-          const membersPop = await Group.findById(updatedGroup._id).populate('members', 'name fullName email');
-          const members = membersPop.members || [];
-          if (members.length > 0 && (split.totalAmount || split.totalAmount === 0)) {
-            const total = split.totalAmount || 0;
-            const count = members.length;
-            const perPerson = Math.round((total / count) * 100) / 100;
-
-            split.breakdown = members.map((m) => ({
-              user: m._id,
-              name: m.fullName || m.name || m.email || 'Participant',
-              email: m.email || '',
-              amount: perPerson,
-              amountPaid: 0,
-              paymentStatus: 'unpaid',
-              percentage: Math.round((100 / count) * 100) / 100,
-              items: [],
-            }));
-
-            split.status = 'calculated';
-            split.calculatedAt = new Date();
-            await split.save();
-
-            // Notify room that split was updated (optional)
-            try {
-              const io = getIO();
-              io.to(String(updatedGroup._id)).emit('split-updated', { splitId: split._id });
-            } catch (e) {
-              // ignore socket errors
-            }
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('Auto-recalc split on group join failed:', e && e.message);
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: alreadyMember ? 'Already a member of this group' : 'Joined group successfully',
-      data: updatedGroup.toJSON(),
-    });
-  } catch (error) {
-    const formattedError = formatMongooseError(error);
-    return sendError(res, formattedError.statusCode, formattedError.message);
+    const result = await addGroupMember({ groupId, actorId: req.user.id, userId: req.user.id, inviteToken: req.body.inviteToken, requireInvitation: true });
+    if (result.status === 'not-found') return error(res, 404, 'Group not found');
+    if (result.status === 'invalid-invitation') return error(res, 403, 'Invitation is invalid, expired, or revoked');
+    const splitId = await recalculateGroupSplit(groupId);
+    emit(groupId, 'participant-joined', { participants: result.group.members, newParticipant: result.group.members.find((m) => m.id === req.user.id) });
+    if (splitId) emit(groupId, 'split-updated', { splitId });
+    return res.json({ success: true, message: result.status === 'exists' ? 'Already a member of this group' : 'Joined group successfully', data: result.group });
+  } catch (cause) {
+    console.error('Join group failed:', cause);
+    return error(res, cause?.code === 'P2003' ? 400 : 500, cause?.code === 'P2003' ? 'User does not exist' : 'Internal server error');
   }
 };
 
-/**
- * Adds a member to the group.
- * POST /api/groups/:groupId/members
- * Body: { userId }
- */
 export const addMember = async (req, res) => {
-  try {
-    const { groupId } = req.params;
-    const { userId } = req.body;
-
-    if (!isValidObjectId(groupId)) {
-      return sendError(res, 400, 'Invalid groupId');
-    }
-
-    if (!userId || !isValidObjectId(userId)) {
-      return sendError(res, 400, 'Valid userId is required');
-    }
-
-    const current = await Group.findById(groupId).select('members');
-    if (!current) {
-      return sendError(res, 404, 'Group not found');
-    }
-
-    const alreadyMember = current.members.some((m) => toObjectIdString(m) === String(userId));
-    if (alreadyMember) {
-      return sendError(res, 409, 'User is already a member of this group');
-    }
-
-    const group = await Group.findByIdAndUpdate(
-      groupId,
-      { $addToSet: { members: userId } },
-      { new: true }
-    )
-      .populate('createdBy', 'fullName email avatarUrl')
-      .populate('members', 'fullName email avatarUrl');
-
-    return res.status(200).json({
-      success: true,
-      message: 'Member added successfully',
-      data: group.toJSON(),
-    });
-  } catch (error) {
-    const formattedError = formatMongooseError(error);
-    return sendError(res, formattedError.statusCode, formattedError.message);
-  }
+  const { groupId } = req.params;
+  const userId = req.body?.userId;
+  if (!validUuid(groupId) || !validUuid(userId)) return error(res, 400, 'Valid groupId and userId are required');
+  const result = await addGroupMember({ groupId, actorId: req.user.id, userId, ownerOnly: true });
+  if (result.status === 'not-found') return error(res, 404, 'Group not found');
+  if (result.status === 'exists') return error(res, 409, 'User is already a member of this group');
+  await recalculateGroupSplit(groupId);
+  return res.json({ success: true, message: 'Member added successfully', data: result.group });
 };
 
-/**
- * Removes a member from the group.
- * DELETE /api/groups/:groupId/members/:userId
- */
 export const removeMember = async (req, res) => {
-  try {
-    const { groupId, userId } = req.params;
-
-    if (!isValidObjectId(groupId)) {
-      return sendError(res, 400, 'Invalid groupId');
-    }
-
-    if (!isValidObjectId(userId)) {
-      return sendError(res, 400, 'Invalid userId');
-    }
-
-    const group = await Group.findById(groupId);
-
-    if (!group) {
-      return sendError(res, 404, 'Group not found');
-    }
-
-    // Cannot remove creator
-    if (group.createdBy.toString() === userId) {
-      return sendError(res, 403, 'Cannot remove group creator');
-    }
-
-    const memberIndex = group.members.findIndex((m) => toObjectIdString(m) === String(userId));
-    if (memberIndex === -1) {
-      return sendError(res, 404, 'User is not a member of this group');
-    }
-
-    group.members.splice(memberIndex, 1);
-    await group.save();
-
-    await group.populate('createdBy', 'fullName email avatarUrl');
-    await group.populate('members', 'fullName email avatarUrl');
-
-    return res.status(200).json({
-      success: true,
-      message: 'Member removed successfully',
-      data: group.toJSON(),
-    });
-  } catch (error) {
-    const formattedError = formatMongooseError(error);
-    return sendError(res, formattedError.statusCode, formattedError.message);
-  }
+  const { groupId, userId } = req.params;
+  if (!validUuid(groupId) || !validUuid(userId)) return error(res, 400, 'Invalid groupId or userId');
+  const result = await removeGroupMember({ groupId, ownerId: req.user.id, userId });
+  if (result.status === 'not-found') return error(res, 404, 'Group not found');
+  if (result.status === 'owner') return error(res, 403, 'Cannot remove group creator');
+  if (result.status === 'not-member') return error(res, 404, 'User is not a member of this group');
+  await recalculateGroupSplit(groupId);
+  return res.json({ success: true, message: 'Member removed successfully', data: result.group });
 };
 
-/**
- * Soft-deactivates a group by setting isActive=false.
- * DELETE /api/groups/:groupId
- */
 export const deactivateGroup = async (req, res) => {
-  try {
-    const { groupId } = req.params;
-
-    if (!isValidObjectId(groupId)) {
-      return sendError(res, 400, 'Invalid groupId');
-    }
-
-    const group = await Group.findByIdAndUpdate(
-      groupId,
-      { isActive: false },
-      { new: true }
-    )
-      .populate('createdBy', 'fullName email avatarUrl')
-      .populate('members', 'fullName email avatarUrl')
-      .lean();
-
-    if (!group) {
-      return sendError(res, 404, 'Group not found');
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: 'Group deactivated successfully',
-      data: group,
-    });
-  } catch (error) {
-    const formattedError = formatMongooseError(error);
-    return sendError(res, formattedError.statusCode, formattedError.message);
-  }
+  if (!validUuid(req.params.groupId)) return error(res, 400, 'Invalid groupId');
+  const group = await updateOwnedGroup({ id: req.params.groupId, ownerId: req.user.id, data: { isActive: false } });
+  return group ? res.json({ success: true, message: 'Group deactivated successfully', data: group }) : error(res, 404, 'Group not found');
 };

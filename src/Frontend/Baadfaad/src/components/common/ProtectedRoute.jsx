@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../../context/authContext';
+import { useAuth } from '../../context/authState';
 import { useMemo } from 'react';
 
 /**
@@ -8,6 +8,8 @@ import { useMemo } from 'react';
  */
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, isLoading, user } = useAuth();
+  const location = useLocation();
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
 
   // Show loading state while checking authentication
   if (isLoading) {
@@ -22,8 +24,6 @@ const ProtectedRoute = ({ children }) => {
   }
 
   // Allow unauthenticated access for session join URLs
-  const location = useLocation();
-  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const pathname = location.pathname || '';
   const flowType = String(searchParams.get('type') || '').toLowerCase();
   const hasSessionContext = Boolean(searchParams.get('sessionId')) || flowType === 'session';

@@ -13,12 +13,14 @@
 import express from "express";
 import {getPassport} from "../config/passport.js";
 import  {login, continueAuth}  from "../controllers/authController.js";
+import { validate } from '../middleware/validate.middleware.js';
+import { authContinueBody, authLoginBody } from '../validation/schemas.js';
 
 
 const router = express.Router();
 
-router.post("/login", login);
-router.post("/continue", continueAuth);
+router.post("/login", validate({ body: authLoginBody }), login);
+router.post("/continue", validate({ body: authContinueBody }), continueAuth);
 
 /* Google OAuth */
 router.get(
@@ -37,7 +39,7 @@ router.get(
     const { token, user } = req.user;
     const frontend = (process.env.FRONTEND_URL || 'https://baadfaad.vercel.app').replace(/\/$/, '');
     res.redirect(
-      `${frontend}/auth/callback?token=${token}&user=${encodeURIComponent(JSON.stringify(user))}`
+      `${frontend}/auth/callback#token=${encodeURIComponent(token)}&user=${encodeURIComponent(JSON.stringify(user))}`
     );
   }
 );

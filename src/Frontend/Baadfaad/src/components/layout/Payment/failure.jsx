@@ -16,21 +16,16 @@ const Failure = () => {
     sessionStorage.getItem("current_transaction_id");
 
   useEffect(() => {
-    if (product_id) {
-      markPaymentAsFailed(product_id);
-    }
+    if (!product_id) return;
+    const verifyFailure = async () => {
+      try {
+        await api.post("/payment/payment-status", { product_id });
+      } catch (error) {
+        console.error("Error verifying payment status:", error);
+      }
+    };
+    verifyFailure();
   }, [product_id]);
-
-  const markPaymentAsFailed = async (product_id) => {
-    try {
-      await api.post("/payment/payment-status", {
-        product_id,
-        status: "FAILED",
-      });
-    } catch (error) {
-      console.error("Error updating payment status:", error);
-    }
-  };
 
   return (
     <div className="failure-container">

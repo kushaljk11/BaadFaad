@@ -11,8 +11,7 @@
 import { useState, useEffect } from "react";
 import { FaPlus, FaArrowRight } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
-import TopBar from "../../components/layout/Dashboard/TopBar";
-import SideBar from "../../components/layout/Dashboard/SideBar";
+import DashboardShell from "../../components/layout/Dashboard/DashboardShell";
 import api from "../../config/config";
 
 export default function Group() {
@@ -51,11 +50,7 @@ export default function Group() {
     navigate("/split/create");
   };
   return (
-    <div className="min-h-screen bg-zinc-100">
-      <TopBar />
-      <SideBar />
-
-      <main className="mx-auto max-w-6xl px-6 py-8 md:ml-56 md:px-8 md:pt-8 sm:mt-10">
+    <DashboardShell mainClassName="mx-auto max-w-6xl px-6 py-8 md:ml-56 md:px-8 md:pt-8 sm:mt-10">
         {/* Header */}
         <section>
           <div className="flex items-start justify-between">
@@ -140,7 +135,6 @@ export default function Group() {
             </button>
           </div>
         </section>
-      </main>
-    </div>
+    </DashboardShell>
   );
 }

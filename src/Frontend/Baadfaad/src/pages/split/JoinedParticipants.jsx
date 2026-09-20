@@ -15,7 +15,7 @@ import SideBar from "../../components/layout/Dashboard/SideBar";
 import TopBar from "../../components/layout/Dashboard/TopBar";
 import { FaSpinner } from "react-icons/fa";
 import api from "../../config/config";
-import { useAuth } from "../../context/authContext";
+import { useAuth } from "../../context/authState";
 import useSessionSocket, { emitHostNavigate } from "../../hooks/useSessionSocket";
 import toast from 'react-hot-toast';
 
@@ -255,7 +255,7 @@ export default function SessionLobby() {
                 <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
                   Participants
                 </p>
-                <p className="text-lg font-bold text-emerald-600">{participants.length} Joined</p>
+                <p className="text-lg font-bold text-emerald-800">{participants.length} Joined</p>
               </div>
 
               <div className="rounded-xl bg-zinc-50 p-3">
@@ -305,7 +305,7 @@ export default function SessionLobby() {
 
             <div className="mt-8 space-y-3">
               {isCurrentUserHost ? (
-                <button onClick={handleContinueToScan} className="w-full rounded-xl bg-emerald-500 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2">
+                <button onClick={handleContinueToScan} className="w-full rounded-xl bg-emerald-400 py-3 text-sm font-bold text-slate-950 shadow-sm transition-colors hover:bg-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2">
                   Continue to Scan Bill
                 </button>
               ) : (

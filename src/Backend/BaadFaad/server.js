@@ -2,7 +2,7 @@
  * @fileoverview BaadFaad — Express Application Entry Point
  * @description Main server file that bootstraps the entire backend:
  *  1. Loads environment variables (dotenv)
- *  2. Connects to MongoDB via Mongoose
+ *  2. Connects to PostgreSQL through Prisma
  *  3. Creates an HTTP server with Express
  *  4. Initializes Socket.IO for real-time session events
  *  5. Registers global middleware (CORS, JSON body parser)
@@ -13,6 +13,8 @@
  */
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import { rateLimit } from 'express-rate-limit';
 import dotenv from 'dotenv';
 import dns from 'node:dns';
 import path from 'path';
@@ -32,6 +34,10 @@ import receiptRoutes from './routes/receipt.routes.js';
 import sessionRoutes from './routes/session.route.js';
 import billRoutes from './routes/bill.routes.js';
 import paymentRoutes from "./routes/payment.routes.js";
+import { protectStrict } from './middleware/auth.middleware.js';
+import { requestContext } from './middleware/requestContext.middleware.js';
+import { errorHandler } from './utils/errors.js';
+import { getPrisma } from './config/prisma.js';
 
 
 
@@ -68,10 +74,14 @@ if (!envLoaded) {
 //   console.warn('Failed to set DNS result order:', e?.message || e);
 // }
 
-connectDB();
+await connectDB();
 
 const app = express();
 const httpServer = createServer(app);
+app.disable('x-powered-by');
+app.set('query parser', 'simple');
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+app.use(requestContext);
 
 // Initialize Socket.IO
 initSocket(httpServer);
@@ -97,23 +107,41 @@ if (process.env.NODE_ENV === 'production') {
 }
 app.use(express.json({ limit: '10mb' }));
 
+const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 300, standardHeaders: 'draft-8', legacyHeaders: false });
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false });
+const expensiveLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: 'draft-8', legacyHeaders: false });
+const mailLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false });
+app.use('/api', apiLimiter);
+
 const PORT = process.env.PORT || 5000;
 
+app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+app.get('/health/ready', async (_req, res) => {
+  try {
+    await getPrisma().$queryRaw`SELECT 1`;
+    return res.json({ status: 'ready', database: 'ok' });
+  } catch {
+    return res.status(503).json({ status: 'not-ready', database: 'unavailable' });
+  }
+});
+
 // Mount API routes
-app.use('/api/auth', authRoutes);
-app.use('/api/participants', participantRoutes);
-app.use('/api/mail', mailRoutes);
-app.use('/api/nudge', nudgeRoutes);
-app.use('/api/groups', groupRoutes);
-app.use('/api/splits', splitRoutes);
-app.use('/api/receipts', receiptRoutes);
-app.use("/api/session", sessionRoutes);
-app.use('/api/bills', billRoutes);
-app.use("/api/payment", paymentRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/participants', protectStrict, participantRoutes);
+app.use('/api/mail', mailLimiter, mailRoutes);
+app.use('/api/nudge', protectStrict, nudgeRoutes);
+app.use('/api/groups', protectStrict, groupRoutes);
+app.use('/api/splits', protectStrict, splitRoutes);
+app.use('/api/receipts', protectStrict, receiptRoutes);
+app.use('/api/session', protectStrict, sessionRoutes);
+app.use('/api/bills', protectStrict, expensiveLimiter, billRoutes);
+app.use('/api/payment', protectStrict, expensiveLimiter, paymentRoutes);
 
 app.get('/', (req, res) => {
   res.send('Server is running!');
 });
+
+app.use(errorHandler);
 
 httpServer.listen(PORT, '0.0.0.0', () => {
   const frontend = (process.env.FRONTEND_URL || 'https://baadfaad.vercel.app').replace(/\/$/, '');
@@ -122,3 +150,20 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`Frontend origin: ${frontend}`);
   console.log(`Google callback URL: ${googleCallback}`);
 });
+
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(JSON.stringify({ level: 'info', message: 'Server shutdown requested', signal }));
+  const forceTimer = setTimeout(() => process.exit(1), 10_000);
+  forceTimer.unref();
+  httpServer.close(async (error) => {
+    try { await getPrisma().$disconnect(); } catch (disconnectError) { console.error('Database disconnect failed:', disconnectError); }
+    clearTimeout(forceTimer);
+    process.exit(error ? 1 : 0);
+  });
+}
+
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));

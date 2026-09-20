@@ -25,7 +25,6 @@ import {
   FaChevronRight,
 } from "react-icons/fa";
 import { NavLink } from "react-router-dom";
-import { useAuth } from "../../../context/authContext";
 
 const menuItems = [
   { label: "Home", icon: FaThLarge, to: "/dashboard" },
@@ -36,8 +35,6 @@ const menuItems = [
 ];
 
 export default function SideBar({ isOpen, onClose, disableInteraction = false }) {
-  const { user } = useAuth();
-
   return (
     <>
       {/* Backdrop/Overlay (Mobile) */}
@@ -118,7 +115,7 @@ export default function SideBar({ isOpen, onClose, disableInteraction = false })
               </p>
               <button
                 type="button"
-                className="mt-4 w-full rounded-xl bg-white py-3 text-sm font-bold text-emerald-600 hover:bg-emerald-50 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
+                className="mt-4 w-full rounded-xl bg-white py-3 text-sm font-bold text-emerald-800 hover:bg-emerald-50 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
               >
                 UPGRADE NOW
               </button>

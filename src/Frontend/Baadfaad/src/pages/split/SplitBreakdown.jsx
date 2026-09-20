@@ -183,7 +183,7 @@ export default function SplitBreakdown() {
   }, [roomId, splitId, fetchSplit]);
 
   const totalAmount = split?.totalAmount || 0;
-  const breakdown = split?.breakdown || [];
+  const breakdown = useMemo(() => split?.breakdown || [], [split?.breakdown]);
 
   // If group mode, ensure we display all group members even if split.breakdown has only host
   const mergedParticipants = useMemo(() => {
@@ -214,7 +214,7 @@ export default function SplitBreakdown() {
   const participantCount = mergedParticipants.length;
 
   // Initialize inline payment form per displayed participant
-  const lastInitRef = useMemo(() => ({ current: null }), []);
+  const lastInitRef = useRef(null);
   useEffect(() => {
     const init = {};
     mergedParticipants.forEach((m, idx) => {
@@ -233,7 +233,7 @@ export default function SplitBreakdown() {
       // Fallback: always set if stringify fails
       setInlinePayments(init);
     }
-  }, [mergedParticipants]);
+  }, [mergedParticipants, lastInitRef]);
 
   // --- Host: update a participant's amountPaid / paymentStatus ---
   const handlePaymentUpdate = async (index, field, value) => {
@@ -348,8 +348,8 @@ export default function SplitBreakdown() {
   };
 
   useEffect(() => {
+    const timers = amountUpdateTimersRef.current;
     return () => {
-      const timers = amountUpdateTimersRef.current || {};
       Object.keys(timers).forEach((k) => {
         try {
           clearTimeout(timers[k]);
@@ -442,6 +442,7 @@ export default function SplitBreakdown() {
       const res = await api.post(
         "/nudge/split-summary",
         {
+          splitId: split._id,
           groupName: session?.name || session?.session?.name || "Split",
           totalAmount,
           breakdown: summaryBreakdown,

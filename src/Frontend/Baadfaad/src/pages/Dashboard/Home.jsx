@@ -129,7 +129,7 @@ export default function Home() {
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
               to="/split/create"
-              className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-6 py-3 text-lg font-bold text-white hover:bg-emerald-500 transition"
+              className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-6 py-3 text-lg font-bold text-slate-950 hover:bg-emerald-300 transition"
             >
               <FaPlusCircle />
               Create Split
@@ -153,7 +153,7 @@ export default function Home() {
                     <FaShoppingCart />
                   </span>
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
                       Last Time You Paid
                     </p>
                     {lastPaid ? (
@@ -161,14 +161,14 @@ export default function Home() {
                         <p className="text-2xl font-bold text-slate-900">
                           Rs. {lastPaid.amount.toLocaleString()} for {lastPaid.label}
                         </p>
-                        <p className="text-sm text-slate-400">on {lastPaid.date}</p>
+                        <p className="text-sm text-slate-600">on {lastPaid.date}</p>
                       </>
                     ) : (
-                      <p className="text-lg font-semibold text-slate-400">N/A</p>
+                      <p className="text-lg font-semibold text-slate-600">N/A</p>
                     )}
                   </div>
                 </div>
-                <button type="button" className="text-slate-400">
+                <button type="button" className="text-slate-600" aria-label="More payment details">
                   <FaEllipsisV />
                 </button>
               </div>
@@ -177,7 +177,7 @@ export default function Home() {
             <section className="rounded-4xl border border-zinc-200 bg-white p-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
-                  <p className="text-xs font-semibold text-slate-400">
+                  <p className="text-xs font-semibold text-slate-600">
                     Monthly Spending
                   </p>
                   <div className="mt-1 flex items-end gap-3">
@@ -202,7 +202,7 @@ export default function Home() {
               </div>
 
               <div className="mt-24">
-                <div className="grid grid-cols-7 text-center text-xs font-semibold text-slate-400">
+                <div className="grid grid-cols-7 text-center text-xs font-semibold text-slate-600">
                   <span>Mon</span>
                   <span>Tue</span>
                   <span>Wed</span>
@@ -218,7 +218,7 @@ export default function Home() {
           <aside className="rounded-4xl border border-zinc-200 bg-white p-6">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold text-slate-900">Recent Splits</h2>
-              <button type="button" className="text-sm font-bold text-emerald-500">
+              <button type="button" className="text-sm font-bold text-emerald-800">
                 View All
               </button>
             </div>
@@ -240,8 +240,8 @@ export default function Home() {
                       </span>
                       <div>
                         <p className="font-bold text-slate-900">{split.title}</p>
-                        <p className="text-xs text-slate-400">{split.date}</p>
-                        <p className="text-xs text-slate-400">{split.members}</p>
+                        <p className="text-xs text-slate-600">{split.date}</p>
+                        <p className="text-xs text-slate-600">{split.members}</p>
                       </div>
                     </div>
                     <div className="text-right">

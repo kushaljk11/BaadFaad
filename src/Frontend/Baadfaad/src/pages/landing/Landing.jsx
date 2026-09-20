@@ -112,13 +112,12 @@ export default function Landing() {
   const [featRef, featVisible] = useOnScreen();
   const [stepRef, stepVisible] = useOnScreen();
   const [waRef, waVisible] = useOnScreen();
-  const [statRef, statVisible] = useOnScreen();
   const [testRef, testVisible] = useOnScreen();
   const [pwaRef, pwaVisible] = useOnScreen();
 
   /* ── PWA install prompt ─────────────────────────────────── */
   const [deferredPrompt, setDeferredPrompt] = useState(null);
-  const [pwaInstalled, setPwaInstalled] = useState(false);
+  const [pwaInstalled, setPwaInstalled] = useState(() => window.matchMedia("(display-mode: standalone)").matches);
 
   /* ── Back to top button ─────────────────────────────────── */
   const [showTop, setShowTop] = useState(false);
@@ -132,7 +131,6 @@ export default function Landing() {
     const handler = (e) => { e.preventDefault(); setDeferredPrompt(e); };
     window.addEventListener("beforeinstallprompt", handler);
     window.addEventListener("appinstalled", () => setPwaInstalled(true));
-    if (window.matchMedia("(display-mode: standalone)").matches) setPwaInstalled(true);
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
@@ -174,7 +172,7 @@ export default function Landing() {
           className="relative mx-auto grid w-full max-w-6xl grid-cols-1 items-center gap-12 lg:grid-cols-2"
         >
           <div className={heroVisible ? "animate-slide-left" : "opacity-0"}>
-            <div className="mb-8 inline-flex items-center gap-2 rounded-full bg-emerald-100 px-4 py-1.5 text-xs font-bold tracking-wider text-emerald-600">
+            <div className="mb-8 inline-flex items-center gap-2 rounded-full bg-emerald-100 px-4 py-1.5 text-xs font-bold tracking-wider text-emerald-800">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 animate-pulse-ring" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
@@ -192,7 +190,7 @@ export default function Landing() {
               Friendships.
             </h1>
 
-            <p className="mt-8 max-w-xl text-xl leading-relaxed text-slate-500">
+            <p className="mt-8 max-w-xl text-xl leading-relaxed text-slate-700">
               Seamless Bill Splitting &amp; Payment Management for Nepal. No
               more Rs.&nbsp;7 drama — just scan, split and settle.
             </p>
@@ -203,14 +201,14 @@ export default function Landing() {
                 onClick={() => navigate("/login")}
                 className="group cursor-pointer rounded-full bg-emerald-400 px-8 py-4 text-xl font-bold text-slate-900 shadow-lg shadow-emerald-300/60 transition-all duration-300 hover:scale-105 hover:bg-emerald-300 hover:shadow-emerald-300/80 active:scale-95"
               >
-                <span className="inline-flex text-white items-center gap-2">
+                <span className="inline-flex text-slate-950 items-center gap-2">
                   Start Splitting
                   <FaFireAlt className="text-lg text-yellow-400 transition-transform group-hover:rotate-12" />
                 </span>
               </button>
               <a
                 href="#how-it-works"
-                className="rounded-full bg-white px-8 py-4 text-xl font-semibold text-emerald-400 shadow transition hover:bg-slate-50 hover:shadow-md"
+                className="rounded-full bg-white px-8 py-4 text-xl font-semibold text-emerald-800 shadow transition hover:bg-slate-50 hover:shadow-md"
               >
                 See How It Works
               </a>
@@ -225,7 +223,7 @@ export default function Landing() {
                   />
                 ))}
               </div>
-              <p className="text-lg font-medium text-slate-500">
+              <p className="text-lg font-medium text-slate-700">
                 Joined by{" "}
                 <span className="font-bold text-slate-700">10k+ groups</span>{" "}
                 this month
@@ -579,7 +577,7 @@ export default function Landing() {
       {/* ─── Payment Partners ─────────────────────────────────────────── */}
       <section className="w-full bg-zinc-100 px-6 py-12 sm:px-8 lg:px-16">
         <div className="mx-auto w-full max-w-6xl">
-          <p className="text-center text-sm font-bold tracking-[0.2em] text-slate-500">
+          <p className="text-center text-sm font-bold tracking-[0.2em] text-slate-700">
             POWERING INSTANT SETTLEMENTS WITH
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-10 sm:gap-14">

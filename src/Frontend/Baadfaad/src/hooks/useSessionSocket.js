@@ -15,7 +15,7 @@
  *
  * @module hooks/useSessionSocket
  */
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import socket from "../config/socket";
 import toast from 'react-hot-toast';
 
@@ -28,27 +28,34 @@ import toast from 'react-hot-toast';
  * @param {(data: object) => void} [onItemsUpdate] - called when the host updates bill items
  */
 export default function useSessionSocket(sessionId, onParticipantJoined, onHostNavigate, onItemsUpdate) {
+  const handlersRef = useRef({ onParticipantJoined, onHostNavigate, onItemsUpdate });
+
+  useEffect(() => {
+    handlersRef.current = { onParticipantJoined, onHostNavigate, onItemsUpdate };
+  }, [onParticipantJoined, onHostNavigate, onItemsUpdate]);
+
   useEffect(() => {
     if (!sessionId) return;
 
     if (!socket.connected) {
+      socket.auth = { token: localStorage.getItem('token') };
       socket.connect();
     }
 
     socket.emit("join-session-room", sessionId);
 
     const joinHandler = (data) => {
-      if (onParticipantJoined) onParticipantJoined(data);
+      handlersRef.current.onParticipantJoined?.(data);
     };
     socket.on("participant-joined", joinHandler);
 
     const navHandler = (data) => {
-      if (onHostNavigate) onHostNavigate(data);
+      handlersRef.current.onHostNavigate?.(data);
     };
     socket.on("host-navigate", navHandler);
 
     const itemsHandler = (data) => {
-      if (onItemsUpdate) onItemsUpdate(data);
+      handlersRef.current.onItemsUpdate?.(data);
     };
     socket.on("items-update", itemsHandler);
 
@@ -59,7 +66,7 @@ export default function useSessionSocket(sessionId, onParticipantJoined, onHostN
         console.debug("socket connected/reconnected and rejoined room", sessionId);
         toast.dismiss('socket-reconnect');
         // brief success toast
-        toast.success('Reconnected to session', { duration: 1500 });
+        toast.success('Connected to session', { duration: 1500 });
       } catch (e) {
         console.debug('Failed to rejoin session on connect', e);
       }
@@ -71,7 +78,7 @@ export default function useSessionSocket(sessionId, onParticipantJoined, onHostN
       toast.loading('Reconnecting...', { id: 'socket-reconnect' });
       console.debug('socket reconnect attempt', attempt);
     };
-    socket.on('reconnect_attempt', onReconnectAttempt);
+    socket.io.on('reconnect_attempt', onReconnectAttempt);
 
     const onDisconnect = (reason) => {
       console.debug('socket disconnected', reason);
@@ -85,17 +92,20 @@ export default function useSessionSocket(sessionId, onParticipantJoined, onHostN
       socket.off("items-update", itemsHandler);
       socket.emit("leave-session-room", sessionId);
       socket.off('connect', onConnect);
-      socket.off('reconnect_attempt', onReconnectAttempt);
+      socket.io.off('reconnect_attempt', onReconnectAttempt);
       socket.off('disconnect', onDisconnect);
     };
-  }, [sessionId, onParticipantJoined, onHostNavigate, onItemsUpdate]);
+  }, [sessionId]);
 }
 
 /**
  * Emit a host-navigate event to move all participants to a new page.
  */
 export function emitHostNavigate(sessionId, path) {
-  if (!socket.connected) socket.connect();
+  if (!socket.connected) {
+    socket.auth = { token: localStorage.getItem('token') };
+    socket.connect();
+  }
   socket.emit("host-navigate", { sessionId, path });
 }
 
@@ -103,6 +113,9 @@ export function emitHostNavigate(sessionId, path) {
  * Emit bill items update so participants see live changes.
  */
 export function emitItemsUpdate(sessionId, scannedData, manualItems) {
-  if (!socket.connected) socket.connect();
+  if (!socket.connected) {
+    socket.auth = { token: localStorage.getItem('token') };
+    socket.connect();
+  }
   socket.emit("items-update", { sessionId, scannedData, manualItems });
 }

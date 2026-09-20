@@ -8,11 +8,11 @@
  * @module pages/auth/AuthCallback
  */
 import React, { useEffect, useContext, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { AuthContext } from '../../context/authContext';
+import { useNavigate } from 'react-router-dom';
+import { AuthContext } from '../../context/authState';
+import api from '../../config/config';
 
 const AuthCallback = () => {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { login } = useContext(AuthContext);
   const hasProcessed = useRef(false);
@@ -24,13 +24,14 @@ const AuthCallback = () => {
 
     const process = async () => {
       try {
-        const token = searchParams.get('token');
-        const userJson = searchParams.get('user');
+        const callbackParams = new URLSearchParams(window.location.hash.slice(1));
+        const token = callbackParams.get('token');
+        const userJson = callbackParams.get('user');
+        window.history.replaceState(null, '', window.location.pathname);
 
         if (token && userJson) {
           const user = JSON.parse(decodeURIComponent(userJson));
           const pendingFullName = localStorage.getItem('pendingFullName');
-          console.debug('AuthCallback: token present, user parsed, pendingFullName=', pendingFullName, 'user=', user);
           const mergedUser = pendingFullName
             ? { ...user, name: pendingFullName }
             : user;
@@ -40,7 +41,6 @@ const AuthCallback = () => {
           // If redirected from a session link, auto-join the session on behalf of the user
           try {
             const stored = localStorage.getItem('postAuthRedirect');
-            console.debug('AuthCallback: postAuthRedirect=', stored);
             let target = null;
             if (stored) {
               target = JSON.parse(stored);
@@ -51,23 +51,16 @@ const AuthCallback = () => {
               const sessionId = sp.get('sessionId');
               const groupId = sp.get('groupId');
               const splitId = sp.get('splitId');
+              const inviteToken = sp.get('invite');
               if (t === 'session' && sessionId) {
-                const cfg = await import('../../config/config');
-                const uid = mergedUser._id || mergedUser.id;
-                console.debug('AuthCallback: attempting auto-join', { sessionId, userId: uid });
-                const joinRes = await cfg.default.post(`/session/join/${sessionId}`, { userId: uid });
-                console.debug('AuthCallback: /session/join response=', joinRes.data);
+                await api.post(`/session/join/${sessionId}`, { inviteToken });
                 localStorage.removeItem('postAuthRedirect');
                 navigate(`/split/joined?splitId=${splitId}&sessionId=${sessionId}&type=${t}`, { replace: true });
                 return;
               }
 
               if (t === 'group' && groupId) {
-                const cfg = await import('../../config/config');
-                const uid = mergedUser._id || mergedUser.id;
-                console.debug('AuthCallback: attempting auto-join group', { groupId, userId: uid });
-                const joinRes = await cfg.default.post(`/groups/${groupId}/join`, { userId: uid });
-                console.debug('AuthCallback: /groups/:groupId/join response=', joinRes.data);
+                await api.post(`/groups/${groupId}/join`, { inviteToken });
                 localStorage.removeItem('postAuthRedirect');
                 navigate(`/split/joined?splitId=${splitId}&groupId=${groupId}&type=${t}`, { replace: true });
                 return;
@@ -100,7 +93,7 @@ const AuthCallback = () => {
     };
 
     process();
-  }, [searchParams, navigate, login]);
+  }, [navigate, login]);
 
   return (
     <div className="min-h-screen flex items-center justify-center">

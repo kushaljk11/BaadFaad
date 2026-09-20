@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../../context/authContext';
+import { useAuth } from '../../context/authState';
 
 /**
  * PublicRoute component - Redirects authenticated users away from auth pages
@@ -7,6 +7,7 @@ import { useAuth } from '../../context/authContext';
  */
 const PublicRoute = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
 
   // Show loading state while checking authentication
   if (isLoading) {
@@ -24,7 +25,6 @@ const PublicRoute = ({ children }) => {
   // If the user was redirected here from a protected route (state.from)
   // or there is a stored `postAuthRedirect` (OAuth/guest flow), allow the
   // login page to render so login logic can complete the post-auth redirect.
-  const location = useLocation();
   const hasRedirectIntent = Boolean(location.state?.from) || Boolean(localStorage.getItem('postAuthRedirect'));
 
   if (isAuthenticated && !hasRedirectIntent) {

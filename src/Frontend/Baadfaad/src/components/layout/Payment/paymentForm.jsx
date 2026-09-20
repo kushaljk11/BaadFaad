@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import api from "../../../config/config";
-import { useAuth } from "../../../context/authContext";
+import { useAuth } from "../../../context/authState";
 import { generateUniqueId } from "../../../utills/helper";
 
 const PaymentComponent = () => {
@@ -16,6 +16,7 @@ const PaymentComponent = () => {
 
   const amountFromQuery = searchParams.get("amount") || "";
   const gatewayFromQuery = searchParams.get("gateway") || "esewa";
+  const splitIdFromQuery = searchParams.get("splitId") || "";
 
   const [formData, setFormData] = useState({
     customerName: user?.name || "",
@@ -50,6 +51,7 @@ const PaymentComponent = () => {
       const response = await api.post("/payment/initiate-payment", {
         ...formData,
         productId,
+        splitId: splitIdFromQuery || undefined,
       });
 
       if (response.data.url) {

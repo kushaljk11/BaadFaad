@@ -11,10 +11,12 @@
  */
 import express from "express";
 import { getMailHealth, sendTestMail } from "../controllers/mail.controller.js";
+import { validate } from '../middleware/validate.middleware.js';
+import { mailBody } from '../validation/schemas.js';
 
 const router = express.Router();
 
 router.get("/health", getMailHealth);
-router.post("/send", sendTestMail);
+router.post("/send", validate({ body: mailBody }), sendTestMail);
 
 export default router;

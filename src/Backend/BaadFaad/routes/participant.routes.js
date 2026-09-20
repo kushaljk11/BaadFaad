@@ -14,18 +14,20 @@
  */
 import express from 'express';
 import * as participantCtrl from '../controllers/participant.controller.js';
+import { validate } from '../middleware/validate.middleware.js';
+import { idParams, paginationQuery, participantCreateBody, participantUpdateBody } from '../validation/schemas.js';
 
 const router = express.Router();
 
 // create a new participant
-router.post('/', participantCtrl.createParticipant);
+router.post('/', validate({ body: participantCreateBody }), participantCtrl.createParticipant);
 
 // list participants
-router.get('/', participantCtrl.getParticipants);
+router.get('/', validate({ query: paginationQuery }), participantCtrl.getParticipants);
 
 // single participant operations
-router.get('/:id', participantCtrl.getParticipantById);
-router.put('/:id', participantCtrl.updateParticipant);
-router.delete('/:id', participantCtrl.deleteParticipant);
+router.get('/:id', validate({ params: idParams }), participantCtrl.getParticipantById);
+router.put('/:id', validate({ params: idParams, body: participantUpdateBody }), participantCtrl.updateParticipant);
+router.delete('/:id', validate({ params: idParams }), participantCtrl.deleteParticipant);
 
 export default router;

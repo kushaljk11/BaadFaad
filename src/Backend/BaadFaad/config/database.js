@@ -1,26 +1,6 @@
 /**
  * @file config/database.js
- * @description MongoDB connection utility using Mongoose. Reads MONGO_URI from environment and
- * exits process on failure to prevent the app from running in a bad state.
+ * @description Compatibility entry point for the PostgreSQL Prisma connection.
  */
-import dns from 'dns';
-import mongoose from 'mongoose';
-
-// cannot reach the system DNS (prevents `querySrv ECONNREFUSED`).
-dns.setServers(['8.8.8.8', '1.1.1.1']);
-
-/**
- * Connect to MongoDB.
- * @returns {Promise<void>} Resolves when connected; exits process on fatal error.
- */
-const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGO_URI, {});
-    console.log('MongoDB connected successfully');
-  } catch (error) {
-    console.error('MongoDB connection failed:', error.message);
-    process.exit(1);
-  }
-};
-
-export default connectDB;
+// PostgreSQL is the application's only runtime data store.
+export { default } from './prisma.js';

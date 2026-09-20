@@ -8,7 +8,7 @@
  * @module middlewares/auth.middleware
  */
 import jwt from 'jsonwebtoken';
-import { User } from '../models/userModel.js';
+import { findUserById } from '../repositories/user.repository.js';
 
 const resolveBearerToken = (req) => {
   const authHeader = req.headers.authorization;
@@ -19,7 +19,8 @@ const resolveBearerToken = (req) => {
 };
 
 const verifyToken = (token) => {
-  const secret = process.env.JWT_SECRET || 'baadfaad-dev-secret';
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error('JWT_SECRET is not configured');
   return jwt.verify(token, secret);
 };
 
@@ -37,10 +38,6 @@ export const protect = (req, res, next) => {
     const token = resolveBearerToken(req);
 
     if (!token) {
-      // In development / prototype mode, allow requests without a token
-      if (process.env.NODE_ENV !== 'production') {
-        return next();
-      }
       return res.status(401).json({ success: false, message: 'Access denied' });
     }
 
@@ -82,7 +79,7 @@ export const requireOAuthUser = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Access denied' });
     }
 
-    const authUser = await User.findById(req.user.id).select('name email');
+    const authUser = await findUserById(req.user.id);
     if (!authUser) {
       return res.status(401).json({ success: false, message: 'User not found' });
     }

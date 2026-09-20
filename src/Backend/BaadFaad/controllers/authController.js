@@ -4,7 +4,8 @@
  * Google OAuth is handled separately via Passport in the auth route.
  */
 import bcrypt from 'bcryptjs';
-import {User} from '../models/userModel.js';
+import crypto from 'node:crypto';
+import { createUser, findUserByEmail } from '../repositories/user.repository.js';
 import { generateToken } from '../utils/generateToken.js';
 
 
@@ -15,17 +16,20 @@ import { generateToken } from '../utils/generateToken.js';
  * @param {import('express').Response} res - JWT token + user object on success
  */
 export const login = async (req, res) => {
-  const { email, password } = req.body;
+  try {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const password = String(req.body?.password || '');
+  if (!email || !password) return res.status(400).json({ message: 'Email and password are required' });
 
-  const user = await User.findOne({ email });
+  const user = await findUserByEmail(email, { includePassword: true });
 
-  if (!user)
-    return res.status(400).json({ message: "User does not exist" });
+  if (!user?.password)
+    return res.status(401).json({ message: "Invalid email or password" });
 
   const isMatch = await bcrypt.compare(password, user.password);
 
   if (!isMatch)
-    return res.status(400).json({ message: "Incorrect password" });
+    return res.status(401).json({ message: "Invalid email or password" });
 
   const token = generateToken(user);
 
@@ -38,6 +42,10 @@ export const login = async (req, res) => {
       role: user.role,
     },
   });
+  } catch (error) {
+    console.error('login error:', error);
+    return res.status(500).json({ message: 'Unable to sign in' });
+  }
 };
 
 /**
@@ -48,29 +56,22 @@ export const login = async (req, res) => {
  */
 export const continueAuth = async (req, res) => {
   try {
-    const { fullName, email } = req.body;
+    const { fullName } = req.body;
 
     if (!fullName || !fullName.trim()) {
       return res.status(400).json({ message: 'Full name is required' });
     }
 
-    let user = null;
-    if (email) {
-      user = await User.findOne({ email });
-      if (!user) {
-        user = await User.create({ name: fullName.trim(), email });
-      }
-    } else {
-      // Create a guest user record with generated local email to satisfy unique constraint
-      const guestEmail = `guest-${Date.now()}-${Math.random().toString(36).slice(2,8)}@local`;
-      user = await User.create({ name: fullName.trim(), email: guestEmail });
-    }
+    // Never bind an unverified email to a guest token; that could impersonate
+    // an existing OAuth account.
+    const guestEmail = `guest-${crypto.randomUUID()}@local`;
+    const user = await createUser({ name: fullName.trim().slice(0, 100), email: guestEmail });
 
     const token = generateToken(user);
 
     return res.status(200).json({ token, user: { id: user._id, name: user.name, email: user.email } });
   } catch (error) {
     console.error('continueAuth error:', error);
-    return res.status(500).json({ message: 'Failed to continue', error: error.message });
+    return res.status(500).json({ message: 'Failed to continue' });
   }
 };

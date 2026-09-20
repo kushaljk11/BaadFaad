@@ -9,7 +9,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useAuth } from '../../context/authContext';
+import { useAuth } from '../../context/authState';
 import SideBar from "../../components/layout/Dashboard/SideBar";
 import TopBar from "../../components/layout/Dashboard/TopBar";
 import { FaArrowRight, FaCopy, FaQrcode, FaSpinner } from "react-icons/fa";
@@ -29,6 +29,7 @@ export default function ReadyToSplit() {
   const sessionId = searchParams.get("sessionId");
   const type = searchParams.get("type");
   const groupId = searchParams.get("groupId");
+  const inviteToken = searchParams.get("invite");
   const { isAuthenticated } = useAuth();
 
   useEffect(() => {
@@ -60,7 +61,7 @@ export default function ReadyToSplit() {
     };
 
     fetchSession();
-  }, [sessionId]);
+  }, [sessionId, groupId, type]);
 
   const handleParticipantJoined = useCallback((data) => {
     // Socket payload contains `participants` (flattened) and `newParticipant`.
@@ -83,8 +84,8 @@ export default function ReadyToSplit() {
 
   const handleCopyLink = () => {
     const link = (groupId || type === 'group')
-      ? `${window.location.origin}/group/join?groupId=${groupId || ''}&splitId=${splitId}`
-      : `${window.location.origin}/session/join?splitId=${splitId}&sessionId=${sessionId}`;
+      ? `${window.location.origin}/group/join?groupId=${groupId || ''}&splitId=${splitId}&type=group&invite=${encodeURIComponent(inviteToken || '')}`
+      : `${window.location.origin}/session/join?splitId=${splitId}&sessionId=${sessionId}&type=session&invite=${encodeURIComponent(inviteToken || '')}`;
     navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -95,7 +96,7 @@ export default function ReadyToSplit() {
     // send them to the public join page where they can join as guest by name.
     if (!isAuthenticated && (type === 'session' || !type && !groupId)) {
       // go to public session join
-      navigate(`/session/join?splitId=${splitId}&sessionId=${sessionId}`);
+      navigate(`/session/join?splitId=${splitId}&sessionId=${sessionId}&invite=${encodeURIComponent(inviteToken || '')}`);
       return;
     }
 

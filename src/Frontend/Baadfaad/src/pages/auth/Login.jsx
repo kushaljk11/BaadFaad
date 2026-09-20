@@ -13,7 +13,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import logo from '@root-assets/Logo-01.png';
 import api from '../../config/config';
 import { API_URL, BASE_URL } from '../../config/config';
-import  {AuthContext}  from '../../context/authContext';
+import  {AuthContext}  from '../../context/authState';
 
 const Login = () => {
   const [fullName, setFullName] = useState('');
@@ -35,10 +35,6 @@ const Login = () => {
     }
   } catch (e) {}
   const { login } = useContext(AuthContext);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-
-
   const handleGoogleLogin = () => {
     const trimmedName = fullName.trim();
     if (trimmedName) {
@@ -57,46 +53,9 @@ const Login = () => {
     window.location.href = googleAuthUrl;
   };
 
-  const handleEmailLogin = async () => {
-    try {
-      if (!email.trim() || !password) return;
-      // Persist redirect after login
-      if (from) {
-        try {
-          localStorage.setItem('postAuthRedirect', JSON.stringify({ pathname: from.pathname, search: from.search }));
-        } catch {}
-      }
-      const response = await api.post('/auth/login', { email: email.trim(), password });
-      const { token, user } = response.data;
-      login(user, token);
-
-      // Redirect back to original location if available (or to create page)
-      const stored = localStorage.getItem('postAuthRedirect');
-      if (from) {
-        navigate(from.pathname + (from.search || ''), { replace: true });
-      } else if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          localStorage.removeItem('postAuthRedirect');
-          navigate(parsed.pathname + (parsed.search || ''), { replace: true });
-        } catch {
-          navigate('/split/create', { replace: true });
-        }
-      } else {
-        navigate('/split/create', { replace: true });
-      }
-    } catch (err) {
-      console.error('Email login failed', err);
-    }
-  };
-
   const handleContinue = async () => {
     try {
-      const storedBefore = localStorage.getItem('postAuthRedirect');
-      console.debug('Login.handleContinue: from=', from, 'postAuthRedirect=', storedBefore);
-
       const response = await api.post('/auth/continue', { fullName: fullName.trim() });
-      console.debug('Login.handleContinue: /auth/continue response=', response.data);
       const { token, user } = response.data;
       login(user, token);
 
@@ -112,11 +71,9 @@ const Login = () => {
           const t = sp.get('type');
           const sessionId = sp.get('sessionId');
           const splitId = sp.get('splitId');
+          const inviteToken = sp.get('invite');
           if (t === 'session' && sessionId) {
-              const uid = user._id || user.id;
-              console.debug('Login.handleContinue: attempting auto-join', { sessionId, userId: uid });
-              const joinRes = await api.post(`/session/join/${sessionId}`, { userId: uid });
-              console.debug('Login.handleContinue: /session/join response=', joinRes.data);
+              await api.post(`/session/join/${sessionId}`, { inviteToken });
               // navigate to joined room explicitly
               navigate(`/split/joined?splitId=${splitId}&sessionId=${sessionId}&type=${t}`, { replace: true });
               return;
@@ -192,7 +149,7 @@ const Login = () => {
           {/* Google Login Button */}
           <button
             onClick={handleGoogleLogin}
-            className={`w-full text-white font-medium py-3 rounded-lg flex items-center justify-center gap-2 transition-colors bg-emerald-400 hover:bg-emerald-500`}
+            className="w-full bg-emerald-400 py-3 text-slate-950 font-bold rounded-lg flex items-center justify-center gap-2 transition-colors hover:bg-emerald-300"
           >
             <span className="w-6 h-6 bg-white rounded flex items-center justify-center">
               <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -233,11 +190,11 @@ const Login = () => {
           {/* Terms and Privacy */}
           <p className="text-center text-xs text-gray-500 mt-6">
             By continuing, you agree to our{' '}
-            <a href="/terms" className="text-emerald-500 hover:underline">
+            <a href="/terms" className="font-medium text-emerald-800 underline">
               Terms of Service
             </a>{' '}
             and{' '}
-            <a href="/privacy" className="text-emerald-500 hover:underline">
+            <a href="/privacy" className="font-medium text-emerald-800 underline">
               Privacy Policy
             </a>
           </p>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../../../config/config";
 import { base64Decode } from "../../../utills/helper";
@@ -7,10 +7,11 @@ const Success = () => {
   const [paymentStatus, setPaymentStatus] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [verificationError, setVerificationError] = useState(false);
+  const [verifiedPayment, setVerifiedPayment] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
 
-  const queryParams = new URLSearchParams(location.search);
+  const queryParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
 
   // For eSewa: Decode the data parameter
   const token = queryParams.get("data");
@@ -18,53 +19,30 @@ const Success = () => {
   const product_id =
     decoded?.transaction_uuid || queryParams.get("purchase_order_id");
 
-  const isKhalti = queryParams.get("pidx") !== null;
-  const rawAmount =
-    decoded?.total_amount ||
-    queryParams.get("total_amount") ||
-    queryParams.get("amount");
-  const total_amount = isKhalti ? rawAmount / 100 : rawAmount;
-
   useEffect(() => {
-    verifyPaymentAndUpdateStatus();
-  }, [product_id]);
-
-  const verifyPaymentAndUpdateStatus = async () => {
-    if (!product_id) {
-      setIsLoading(false);
-      setVerificationError(true);
-      return;
-    }
-
-    try {
-      const response = await api.post("/payment/payment-status", {
-        product_id,
-        pidx: queryParams.get("pidx"),
-      });
-
-      if (response.status === 200) {
+    const verify = async () => {
+      if (!product_id) {
         setIsLoading(false);
-
+        setVerificationError(true);
+        return;
+      }
+      try {
+        const response = await api.post("/payment/payment-status", { product_id, pidx: queryParams.get("pidx") });
+        setIsLoading(false);
         if (response.data.status === "COMPLETED") {
           setPaymentStatus("COMPLETED");
-        } else {
-          navigate("/payment-failure", {
-            search: `?purchase_order_id=${product_id}`,
-          });
-          return;
+          setVerifiedPayment(response.data);
         }
+        else navigate("/payment-failure", { search: `?purchase_order_id=${product_id}` });
+      } catch (error) {
+        console.error("Error confirming payment:", error);
+        setIsLoading(false);
+        setVerificationError(true);
+        if (error.response?.status === 400) navigate("/payment-failure", { search: `?purchase_order_id=${product_id}` });
       }
-    } catch (error) {
-      console.error("Error confirming payment:", error);
-      setIsLoading(false);
-      setVerificationError(true);
-      if (error.response && error.response.status === 400) {
-        navigate("/payment-failure", {
-          search: `?purchase_order_id=${product_id}`,
-        });
-      }
-    }
-  };
+    };
+    verify();
+  }, [navigate, product_id, queryParams]);
 
   if (isLoading) return <div className="loading-container">Loading...</div>;
 
@@ -117,7 +95,7 @@ const Success = () => {
       <div className="transaction-details">
         <h3>Transaction Details</h3>
         <p>
-          <strong>Amount Paid:</strong> NPR {total_amount}
+          <strong>Amount Paid:</strong> {verifiedPayment?.currency || "NPR"} {verifiedPayment?.amount}
         </p>
         <p>
           <strong>Transaction ID:</strong> {product_id}
@@ -125,7 +103,7 @@ const Success = () => {
         {paymentStatus === "COMPLETED" && (
           <>
             <p>
-              <strong>Payment Method:</strong> {isKhalti ? "Khalti" : "eSewa"}
+              <strong>Payment Method:</strong> {verifiedPayment?.gateway === "khalti" ? "Khalti" : "eSewa"}
             </p>
             <p>
               <strong>Status:</strong> Completed

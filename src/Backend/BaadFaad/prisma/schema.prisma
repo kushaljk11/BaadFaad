@@ -1,0 +1,351 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  email     String   @unique
+  image     String?
+  password  String?
+  role      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participantProfiles Participant[]
+  groupMemberships    GroupMember[]
+  sessionMemberships  SessionParticipant[]
+  splitParticipants   SplitParticipant[]
+  paymentsMade        Payment[]
+  gatewayTransactions Transaction[]
+  sentNudges          Nudge[]
+  invitationsCreated  Invitation[]
+}
+
+model Participant {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @db.Uuid
+  name      String
+  email     String
+  isHost    Boolean  @default(false)
+  joinedAt  DateTime @default(now())
+  totalOwed Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user               User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessionMemberships SessionParticipant[]
+  splitParticipants  SplitParticipant[]
+
+  @@index([userId])
+}
+
+model Receipt {
+  id                 String        @id @default(uuid()) @db.Uuid
+  createdBy          String        @db.Uuid
+  restaurant         String        @default("")
+  address            String        @default("")
+  items              Json          @default("[]")
+  totalAmount        Float
+  imageUrl           String        @default("")
+  uploadedBy         String?       @db.Uuid
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  currency           String        @default("NPR")
+  source             String        @default("manual")
+  subtotalPaisa      BigInt?
+  taxPaisa           BigInt?
+  serviceChargePaisa BigInt?
+  discountPaisa      BigInt?
+  totalPaisa         BigInt?
+  rawAiData          Json?
+  parsedAt           DateTime?
+  relationalItems    ReceiptItem[]
+  splits             Split[]
+
+  @@index([createdBy])
+}
+
+model Split {
+  id                     String             @id @default(uuid()) @db.Uuid
+  createdBy              String             @db.Uuid
+  name                   String             @default("")
+  receiptId              String?            @db.Uuid
+  splitType              String
+  status                 String             @default("pending")
+  breakdown              Json               @default("[]")
+  payments               Json               @default("[]")
+  totalAmount            Float
+  calculatedAt           DateTime?
+  finalizedAt            DateTime?
+  notes                  String?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  totalPaisa             BigInt?
+  version                Int                @default(1)
+  relationalParticipants SplitParticipant[]
+  relationalPayments     Payment[]
+  gatewayTransactions    Transaction[]
+  receipt                Receipt?           @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  sessions               Session[]
+  groups                 Group[]
+
+  @@index([createdBy])
+  @@index([receiptId])
+}
+
+model Session {
+  id                     String               @id @default(uuid()) @db.Uuid
+  name                   String
+  splitId                String               @unique @db.Uuid
+  participants           Json                 @default("[]")
+  qrCode                 String               @default("")
+  startDate              DateTime             @default(now())
+  endDate                DateTime
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  relationalParticipants SessionParticipant[]
+  invitations            Invitation[]
+  split                  Split                @relation(fields: [splitId], references: [id], onDelete: Cascade)
+}
+
+model Group {
+  id                String        @id @default(uuid()) @db.Uuid
+  name              String
+  description       String        @default("")
+  members           String[]      @default([])
+  createdBy         String        @db.Uuid
+  image             String        @default("")
+  splitId           String?       @db.Uuid
+  sessionId         String?       @db.Uuid
+  qrCode            String        @default("")
+  defaultCurrency   String        @default("NPR")
+  isActive          Boolean       @default(true)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  relationalMembers GroupMember[]
+  invitations       Invitation[]
+  split             Split?        @relation(fields: [splitId], references: [id], onDelete: SetNull)
+
+  @@index([createdBy, createdAt])
+  @@index([isActive])
+}
+
+model Nudge {
+  id                 String            @id @default(uuid()) @db.Uuid
+  recipientName      String
+  recipientEmail     String
+  senderName         String
+  groupName          String
+  amount             Float
+  amountPaisa        BigInt?
+  currency           String            @default("NPR")
+  dueDate            String            @default("soon")
+  payLink            String            @default("#")
+  paidByName         String            @default("")
+  status             String            @default("pending")
+  errorMessage       String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  senderId           String?           @db.Uuid
+  splitParticipantId String?           @db.Uuid
+  sender             User?             @relation(fields: [senderId], references: [id], onDelete: SetNull)
+  splitParticipant   SplitParticipant? @relation(fields: [splitParticipantId], references: [id], onDelete: SetNull)
+
+  @@index([senderId, createdAt])
+  @@index([splitParticipantId, createdAt])
+  @@index([senderId, splitParticipantId, createdAt])
+}
+
+model Transaction {
+  id                    String    @id @default(uuid()) @db.Uuid
+  customerDetails       Json
+  product_name          String
+  product_id            String    @unique
+  amount                Float
+  payment_gateway       String
+  status                String    @default("PENDING")
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  splitId               String?   @db.Uuid
+  userId                String?   @db.Uuid
+  amountPaisa           BigInt?
+  paidAmountPaisa       BigInt?
+  currency              String    @default("NPR")
+  providerTransactionId String?   @unique
+  idempotencyKey        String?   @unique
+  completedAt           DateTime?
+  failureReason         String?
+  providerResponse      Json?
+  split                 Split?    @relation(fields: [splitId], references: [id], onDelete: SetNull)
+  user                  User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([splitId, status, createdAt])
+  @@index([userId, createdAt])
+}
+
+enum GroupMemberRole {
+  OWNER
+  MEMBER
+}
+
+enum SplitParticipantStatus {
+  UNPAID
+  PARTIAL
+  PAID
+}
+
+enum PaymentStatus {
+  PENDING
+  VERIFIED
+  FAILED
+  REFUNDED
+}
+
+enum InvitationType {
+  GROUP
+  SESSION
+}
+
+model GroupMember {
+  id        String          @id @default(uuid()) @db.Uuid
+  groupId   String          @db.Uuid
+  userId    String          @db.Uuid
+  role      GroupMemberRole @default(MEMBER)
+  joinedAt  DateTime        @default(now())
+  removedAt DateTime?
+  group     Group           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([groupId, userId])
+  @@index([userId, removedAt])
+}
+
+model SessionParticipant {
+  id            String       @id @default(uuid()) @db.Uuid
+  sessionId     String       @db.Uuid
+  userId        String?      @db.Uuid
+  participantId String?      @db.Uuid
+  displayName   String
+  email         String?
+  isHost        Boolean      @default(false)
+  joinedAt      DateTime     @default(now())
+  leftAt        DateTime?
+  session       Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user          User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  participant   Participant? @relation(fields: [participantId], references: [id], onDelete: SetNull)
+
+  @@unique([sessionId, userId])
+  @@unique([sessionId, participantId])
+  @@index([sessionId, leftAt, joinedAt])
+}
+
+model ReceiptItem {
+  id              String                @id @default(uuid()) @db.Uuid
+  receiptId       String                @db.Uuid
+  name            String
+  quantity        Decimal               @default(1) @db.Decimal(12, 3)
+  unitPricePaisa  BigInt
+  totalPricePaisa BigInt
+  sortOrder       Int                   @default(0)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  receipt         Receipt               @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  assignments     SplitItemAssignment[]
+
+  @@index([receiptId, sortOrder])
+}
+
+model SplitParticipant {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  splitId            String                 @db.Uuid
+  userId             String?                @db.Uuid
+  participantId      String?                @db.Uuid
+  displayName        String
+  email              String?
+  amountPaisa        BigInt
+  percentageBps      Int?
+  status             SplitParticipantStatus @default(UNPAID)
+  sortOrder          Int                    @default(0)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  split              Split                  @relation(fields: [splitId], references: [id], onDelete: Cascade)
+  user               User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  participant        Participant?           @relation(fields: [participantId], references: [id], onDelete: SetNull)
+  itemAssignments    SplitItemAssignment[]
+  paymentAllocations PaymentAllocation[]
+  nudges             Nudge[]
+
+  @@unique([splitId, userId])
+  @@unique([splitId, participantId])
+  @@index([splitId, status, sortOrder])
+}
+
+model SplitItemAssignment {
+  id                 String           @id @default(uuid()) @db.Uuid
+  splitParticipantId String           @db.Uuid
+  receiptItemId      String           @db.Uuid
+  quantity           Decimal          @default(1) @db.Decimal(12, 3)
+  amountPaisa        BigInt
+  splitParticipant   SplitParticipant @relation(fields: [splitParticipantId], references: [id], onDelete: Cascade)
+  receiptItem        ReceiptItem      @relation(fields: [receiptItemId], references: [id], onDelete: Restrict)
+
+  @@unique([splitParticipantId, receiptItemId])
+  @@index([receiptItemId])
+}
+
+model Payment {
+  id           String              @id @default(uuid()) @db.Uuid
+  splitId      String              @db.Uuid
+  paidByUserId String?             @db.Uuid
+  amountPaisa  BigInt
+  currency     String              @default("NPR")
+  method       String
+  status       PaymentStatus       @default(PENDING)
+  note         String              @default("")
+  verifiedAt   DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  split        Split               @relation(fields: [splitId], references: [id], onDelete: Restrict)
+  paidByUser   User?               @relation(fields: [paidByUserId], references: [id], onDelete: SetNull)
+  allocations  PaymentAllocation[]
+
+  @@index([splitId, status, createdAt])
+  @@index([paidByUserId, createdAt])
+}
+
+model PaymentAllocation {
+  id                 String           @id @default(uuid()) @db.Uuid
+  paymentId          String           @db.Uuid
+  splitParticipantId String           @db.Uuid
+  amountPaisa        BigInt
+  payment            Payment          @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  splitParticipant   SplitParticipant @relation(fields: [splitParticipantId], references: [id], onDelete: Restrict)
+
+  @@unique([paymentId, splitParticipantId])
+  @@index([splitParticipantId])
+}
+
+model Invitation {
+  id          String         @id @default(uuid()) @db.Uuid
+  type        InvitationType
+  tokenHash   String         @unique
+  createdById String         @db.Uuid
+  groupId     String?        @db.Uuid
+  sessionId   String?        @db.Uuid
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  maxUses     Int            @default(0)
+  useCount    Int            @default(0)
+  createdAt   DateTime       @default(now())
+  createdBy   User           @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  group       Group?         @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  session     Session?       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([groupId, expiresAt])
+  @@index([sessionId, expiresAt])
+}

@@ -14,10 +14,12 @@ import {
   createReceipt,
   getReceiptById,
 } from '../controllers/receipt.controller.js';
+import { validate } from '../middleware/validate.middleware.js';
+import { idParams, receiptCreateBody } from '../validation/schemas.js';
 
 const router = express.Router();
 
-router.post('/', createReceipt);
-router.get('/:id', getReceiptById);
+router.post('/', validate({ body: receiptCreateBody }), createReceipt);
+router.get('/:id', validate({ params: idParams }), getReceiptById);
 
 export default router;

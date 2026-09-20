@@ -56,12 +56,13 @@ export default function CreateSplit() {
       });
       
       const session = sessionRes.data.session;
+      const inviteToken = new URL(sessionRes.data.inviteUrl).searchParams.get('invite');
       
       toast.dismiss(toastId);
       toast.success("Session created successfully!");
       
       // Navigate with IDs in URL - data is in database
-      navigate(`/split/ready?splitId=${split._id}&sessionId=${session._id}&type=session`);
+      navigate(`/split/ready?splitId=${split._id}&sessionId=${session._id}&type=session&invite=${encodeURIComponent(inviteToken)}`);
     } catch (err) {
       console.error("Failed to create session:", err);
       toast.dismiss(toastId);
@@ -130,11 +131,12 @@ export default function CreateSplit() {
         sessionId: session._id,
       });
       const groupId = groupRes.data?.data?.id || groupRes.data?.data?._id || groupRes.data?.id;
+      const inviteToken = new URL(groupRes.data.inviteUrl).searchParams.get('invite');
 
       toast.dismiss(toastId);
       toast.success("Group created & session ready!");
       
-      navigate(`/split/ready?splitId=${split._id}&sessionId=${session._id}&type=group&groupId=${groupId}`);
+      navigate(`/split/ready?splitId=${split._id}&sessionId=${session._id}&type=group&groupId=${groupId}&invite=${encodeURIComponent(inviteToken)}`);
     } catch (err) {
       toast.dismiss(toastId);
       toast.error(

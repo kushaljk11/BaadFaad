@@ -32,23 +32,23 @@ BaadFaad is built specifically for Nepali group payments: it understands local p
 
 | Layer        | Technologies |
 |------------- |---------------|
-| **Backend**  | Node.js, Express 5, MongoDB, Mongoose, Socket.IO, JWT, Passport (Google OAuth 2.0), Mailjet, @google/genai (Gemini),Tesseract.js
+| **Backend**  | Node.js, Express 5, PostgreSQL, Prisma ORM 7, Socket.IO, JWT, Passport (Google OAuth 2.0), Mailjet, @google/genai (Gemini), Tesseract.js |
 | **Frontend** | React 19, React Router 7, Vite 7, Tailwind CSS 4, socket.io-client, react-hot-toast, vite-plugin-pwa |
-| **Database** | MongoDB (NoSQL; no seed data required) |
+| **Database** | PostgreSQL managed through Prisma ORM |
 
 ---
 
 ## Architecture Overview
 
 At a high level, the **React + Vite frontend** talks to the **Express backend controllers** over REST and Socket.IO.  
-The backend persists bills, users, sessions, and splits in **MongoDB**, connects to **payment gateways (eSewa / Khalti)** to verify payments and callbacks, and uses **Socket.IO** to push real-time updates (status changes, new participants, settlements) back to all connected group members.  
+The backend persists bills, users, sessions, and splits in **PostgreSQL through Prisma**, connects to **payment gateways (eSewa / Khalti)** to verify payments and callbacks, and uses **Socket.IO** to push real-time updates (status changes, new participants, settlements) back to all connected group members.
 You can see this flow summarized in the `Architecture.md` diagram: Frontend → Backend Controllers → MongoDB / Payment Gateway / Socket.IO → back to members.
 
 ---
 
 ## 6. Setup Instructions (Step-by-Step)
 
-**Prerequisites:** Node.js (v18+), npm, MongoDB (local or Atlas URI), and a `.env` file (see Environment Variables below).
+**Prerequisites:** Node.js 20.19+ (or 22.12+), npm, PostgreSQL, and a `.env` file (see Environment Variables below).
 
 1. **Clone the repository**
    ```bash
@@ -66,6 +66,7 @@ You can see this flow summarized in the `Architecture.md` diagram: Frontend → 
    ```bash
    cd src/Backend/BaadFaad
    npm install
+   npm run db:deploy
    npm run dev
    ```
    Backend runs at `http://localhost:5000`. Health check: open `http://localhost:5000/` — you should see "Server is running!".
@@ -94,7 +95,7 @@ Create a `.env` file at the **project root** (or where the backend loads it), us
 | Variable                    | Description                                                               |
 |-----------------------------|---------------------------------------------------------------------------|
 | `PORT`                      | Backend server port (default: `5000`)                                     |
-| `MONGO_URI`                 | MongoDB connection string (Atlas or local)                                |
+| `DATABASE_URL`              | PostgreSQL URL, e.g. `postgresql://user:pass@localhost:5432/baadfaad`     |
 | `JWT_SECRET`                | Secret for signing JWT tokens                                             |
 | `GOOGLE_CLIENT_ID`          | Google OAuth 2.0 client ID                                                |
 | `GOOGLE_CLIENT_SECRET`      | Google OAuth 2.0 client secret                                            |

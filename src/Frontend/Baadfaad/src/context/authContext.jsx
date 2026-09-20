@@ -13,10 +13,8 @@
  *
  * @module context/authContext
  */
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-
-// Export the context
-export const AuthContext = createContext();
+import React, { useEffect, useState, useCallback } from "react";
+import { AuthContext } from './authState';
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -30,9 +28,10 @@ export const AuthProvider = ({ children }) => {
       if (token && userData) {
         setUser(JSON.parse(userData));
       }
-    } catch (err) {
+    } catch {
       console.error("Invalid stored auth data");
-      localStorage.clear();
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
     } finally {
       setLoading(false);
     }
@@ -55,6 +54,3 @@ export const AuthProvider = ({ children }) => {
 
   return React.createElement(AuthContext.Provider, { value }, children);
 };
-
-// Export hook to consume context
-export const useAuth = () => useContext(AuthContext);
