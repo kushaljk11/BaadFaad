@@ -1,31 +1,36 @@
 /**
  * @fileoverview Joined Participants / Session Lobby Page
  * @description Displays all participants who have joined the current session.
- *              Each participant is shown with a color-coded avatar, name, and
- *              join status. The host sees a "Calculate Split" button; non-host
- *              participants wait for the host to navigate. Live updates via
- *              Socket.IO's `participant-joined` and `host-navigate` events.
- *              Uses the Dashboard SideBar + TopBar layout.
+ *              Key Features:
+ *              - Live real-time participant cards with ConnectionPill
+ *              - Host can add local participants directly via fast entry
+ *              - Host-controlled progression with sticky mobile CTA
+ *              - Accessible leave session action
  *
  * @module pages/split/JoinedParticipants
  */
-import { useState, useEffect, useCallback } from "react";
+
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import SideBar from "../../components/layout/Dashboard/SideBar";
 import TopBar from "../../components/layout/Dashboard/TopBar";
-import { FaSpinner } from "react-icons/fa";
+import { FaUsers, FaArrowRight, FaQrcode } from "react-icons/fa";
 import api from "../../config/config";
 import { useAuth } from "../../context/authState";
 import useSessionSocket, { emitHostNavigate } from "../../hooks/useSessionSocket";
-import toast from 'react-hot-toast';
+import toast from "react-hot-toast";
+import { ConnectionPill, ParticipantListSkeleton } from "../../components/common/primitives";
+import LoadingButton from "../../components/common/LoadingButton";
+import ParticipantEntry from "../../components/common/ParticipantEntry";
+import { getInitials } from "../../utills/helper";
 
-const COLORS = [
-  { color: "bg-purple-200", textColor: "text-purple-700" },
-  { color: "bg-pink-200", textColor: "text-pink-700" },
-  { color: "bg-blue-200", textColor: "text-blue-700" },
-  { color: "bg-teal-200", textColor: "text-teal-700" },
-  { color: "bg-orange-200", textColor: "text-orange-700" },
-  { color: "bg-rose-200", textColor: "text-rose-700" },
+const AVATAR_PALETTE = [
+  "bg-emerald-100 text-emerald-800 border-emerald-300",
+  "bg-blue-100 text-blue-800 border-blue-300",
+  "bg-purple-100 text-purple-800 border-purple-300",
+  "bg-amber-100 text-amber-800 border-amber-300",
+  "bg-rose-100 text-rose-800 border-rose-300",
+  "bg-teal-100 text-teal-800 border-teal-300",
 ];
 
 export default function SessionLobby() {
@@ -40,287 +45,279 @@ export default function SessionLobby() {
   const sessionId = searchParams.get("sessionId");
   const type = searchParams.get("type");
   const groupId = searchParams.get("groupId");
-
-  const roomId = type === 'group' ? groupId : sessionId;
+  const roomId = type === "group" ? groupId : sessionId;
 
   const normalizeId = (value) => {
     if (!value) return "";
     if (typeof value === "string") return value;
     if (typeof value === "object") {
-      if (value._id) return String(value._id);
-      if (value.id) return String(value.id);
-      if (typeof value.toString === "function") return value.toString();
+      return String(value._id || value.id || "");
     }
     return String(value);
   };
 
-  const normalizedCurrentUserId = normalizeId(user?._id || user?.id);
-  const normalizedCurrentUserEmail = (user?.email || "").trim().toLowerCase();
+  const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+  const normalizedCurrentUserId = normalizeId(user?._id || user?.id || storedUser?._id || storedUser?.id);
+  const currentUserName = user?.name || storedUser?.name || "";
 
-  // Start the Table Timer when entering the lobby
-  useEffect(() => {
-    if (sessionId && !localStorage.getItem(`timer_start_${sessionId}`)) {
-      localStorage.setItem(`timer_start_${sessionId}`, Date.now().toString());
-    }
-  }, [sessionId]);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        if (sessionId) {
-          const sessionRes = await api.get(`/session/${sessionId}`);
-          setSession(sessionRes.data);
-        }
-
-        if (type === 'group' && groupId) {
-          const groupRes = await api.get(`/groups/${groupId}`);
-          // Normalize group data into session-like shape for UI
-          const grp = groupRes.data.data || groupRes.data;
-          setSession({ name: grp.name || 'Group', participants: grp.members || [] });
-        }
-      } catch (err) {
-        console.error("Failed to fetch data:", err);
-      } finally {
-        setLoading(false);
+  const fetchLobbyData = useCallback(async () => {
+    try {
+      if (sessionId) {
+        const sessionRes = await api.get(`/session/${sessionId}`);
+        setSession(sessionRes.data);
       }
-    };
-
-    fetchData();
+      if (type === "group" && groupId) {
+        const groupRes = await api.get(`/groups/${groupId}`);
+        const grp = groupRes.data.data || groupRes.data;
+        setSession({ name: grp.name || "Group", participants: grp.members || [] });
+      }
+    } catch (err) {
+      console.error("Failed to fetch lobby data:", err);
+    } finally {
+      setLoading(false);
+    }
   }, [sessionId, type, groupId]);
 
-  const handleParticipantJoined = useCallback((data) => {
-    // Socket emits { participants, newParticipant } — update participants list
-    if (data?.participants) {
-      setSession((prev) => ({ ...(prev || {}), participants: data.participants }));
+  useEffect(() => {
+    fetchLobbyData();
+  }, [fetchLobbyData]);
 
-      // Notify host about a new participant join
-      try {
-        const hostId = data.participants?.[0]?._id || data.participants?.[0]?._id;
-        if (data.newParticipant) {
-          const normalizedHostId = String(hostId || "");
-          if (normalizedHostId && normalizedHostId === normalizedCurrentUserId) {
-            const newName = data.newParticipant?.name || 'Someone';
-            toast.success(`${newName} joined the session`);
-          }
+  const handleParticipantJoined = useCallback(
+    (data) => {
+      if (data?.participants) {
+        setSession((prev) => ({ ...(prev || {}), participants: data.participants }));
+        if (data.newParticipant?.name) {
+          toast.success(`${data.newParticipant.name} joined`);
         }
-      } catch {
-        // Ignore non-critical toast failures.
+        return;
       }
-      return;
-    }
+      if (data?.session) {
+        setSession(data.session);
+      }
+    },
+    []
+  );
 
-    if (data?.session) {
-      setSession(data.session);
-      return;
-    }
-  }, [normalizedCurrentUserId]);
+  const handleHostNavigate = useCallback(
+    (data) => {
+      if (data.path) {
+        navigate(data.path);
+      }
+    },
+    [navigate]
+  );
 
-  const handleHostNavigate = useCallback((data) => {
-    if (data.path) {
-      navigate(data.path);
-    }
-  }, [navigate]);
-
-  useSessionSocket(roomId, handleParticipantJoined, handleHostNavigate);
-
-  const splitName = session?.name || "Split Session";
+  const { connectionStatus } = useSessionSocket(
+    roomId,
+    handleParticipantJoined,
+    handleHostNavigate,
+    null,
+    fetchLobbyData
+  );
 
   const rawParticipants = session?.participants || [];
   const uniqueParticipants = [];
   const seenParticipantKeys = new Set();
-  let hasCurrentUser = false;
 
   rawParticipants.forEach((p, index) => {
-    const participantId = normalizeId(p.user || p.participant || p._id);
-    const participantEmail = (
-      p.email || p.user?.email || p.participant?.email || ""
-    )
-      .trim()
-      .toLowerCase();
+    const participantId = normalizeId(p.user || p.participant || p._id || p.id);
     const participantName =
       p.name ||
       p.user?.name ||
       p.participant?.name ||
       p.email ||
       p.user?.email ||
-      p.participant?.email ||
-      `User ${index + 1}`;
-    const isCurrentUser =
-      (!!normalizedCurrentUserId && participantId === normalizedCurrentUserId) ||
-      (!!normalizedCurrentUserEmail &&
-        !!participantEmail &&
-        participantEmail === normalizedCurrentUserEmail);
+      `Friend ${index + 1}`;
 
-    const dedupeKey =
-      participantId
-        ? `id:${participantId}`
-        : participantEmail
-          ? `email:${participantEmail}`
-          : `name:${String(participantName).trim().toLowerCase()}`;
+    const key = participantId || `name:${participantName.toLowerCase()}`;
+    if (!seenParticipantKeys.has(key)) {
+      seenParticipantKeys.add(key);
+      const isYou =
+        (Boolean(normalizedCurrentUserId) && participantId === normalizedCurrentUserId) ||
+        (Boolean(currentUserName) && participantName.toLowerCase() === currentUserName.toLowerCase());
 
-    if (isCurrentUser && hasCurrentUser) {
-      return;
-    }
-
-    if (!seenParticipantKeys.has(dedupeKey)) {
-      seenParticipantKeys.add(dedupeKey);
-      if (isCurrentUser) hasCurrentUser = true;
-      uniqueParticipants.push(p);
+      uniqueParticipants.push({
+        id: key,
+        name: participantName,
+        isHost: index === 0,
+        isYou,
+      });
     }
   });
 
-  // Get participants from session and map them to display format
-  const participants = uniqueParticipants.map((p, index) => {
-    const participantId = normalizeId(p.user || p.participant || p._id);
-    const participantEmail = (
-      p.email || p.user?.email || p.participant?.email || ""
-    )
-      .trim()
-      .toLowerCase();
-    const participantName =
-      p.name ||
-      p.user?.name ||
-      p.participant?.name ||
-      p.email ||
-      p.user?.email ||
-      p.participant?.email ||
-      `User ${index + 1}`;
+  const isCurrentUserHost =
+    uniqueParticipants.length > 0 && uniqueParticipants[0].isYou;
 
-    const isCurrentUser =
-      (!!normalizedCurrentUserId && participantId === normalizedCurrentUserId) ||
-      (!!normalizedCurrentUserEmail &&
-        !!participantEmail &&
-        participantEmail === normalizedCurrentUserEmail);
+  const handleAddParticipant = async (updatedList) => {
+    // When host manually adds names from lobby
+    const newlyAdded = updatedList[updatedList.length - 1];
+    if (newlyAdded && sessionId) {
+      try {
+        await api.post(`/session/${sessionId}/join`, {
+          name: newlyAdded.name,
+        });
+        fetchLobbyData();
+      } catch (e) {
+        console.warn("Failed to join participant via API", e);
+      }
+    }
+  };
 
-    const displayName = isCurrentUser ? "You" : participantName;
-    
-    const isHost = index === 0; // First participant is the host (creator)
-    
-    return {
-      id: participantId || index,
-      name: displayName,
-      initial: participantName.charAt(0).toUpperCase(),
-      isCurrentUser,
-      isHost,
-      ...COLORS[index % COLORS.length],
-    };
-  });
-
-  const isCurrentUserHost = participants.length > 0 && Boolean(participants[0]?.isCurrentUser);
-
-  const handleContinueToScan = () => {
-    const path = `/split/scan?splitId=${splitId}&sessionId=${sessionId}&type=${type}${groupId ? `&groupId=${groupId}` : ''}`;
-    emitHostNavigate(roomId, path);
+  const handleContinue = () => {
+    const path = `/split/scan?splitId=${splitId}&sessionId=${sessionId}&type=${type}${
+      groupId ? `&groupId=${groupId}` : ""
+    }`;
+    if (roomId) emitHostNavigate(roomId, path);
     navigate(path);
   };
 
-  const handleLeave = () => {
-    navigate("/dashboard");
-  };
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen bg-slate-50">
-        <TopBar onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)} isOpen={isMobileMenuOpen} />
-        <SideBar isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
-        <main className="ml-0 flex-1 px-10 py-6 pt-24 md:ml-56 md:pt-6 sm:mt-10 flex items-center justify-center">
-          <FaSpinner className="animate-spin text-4xl text-emerald-500" />
-        </main>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      <TopBar onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)} isOpen={isMobileMenuOpen} />
+    <div className="flex min-h-screen bg-zinc-50 pb-24 md:pb-8 overflow-x-hidden w-full">
+      <TopBar
+        onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        isOpen={isMobileMenuOpen}
+      />
       <SideBar isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
-      <main className="ml-0 flex-1 px-10 py-6 pt-24 md:ml-56 md:pt-6  sm:mt-10">
-        <div className="mx-auto ">
-          {/* Header Section */}
-          <div className="mb-6">
-            <h1 className="text-6xl font-bold text-slate-900">Everyone In?</h1>
-            <p className="mt-2 text-base text-slate-500">
-              Wait for everyone to join before you scan the bill QR.
-            </p>
-            <p className="mt-2 text-base text-slate-500">
-              {" "}
-              Split: <span className="font-bold text-slate-700">{splitName}</span>
-            </p>
+
+      <main className="ml-0 flex-1 px-4 py-6 pt-20 md:ml-56 md:px-8 md:pt-6 overflow-x-hidden w-full max-w-full">
+        <div className="mx-auto max-w-2xl space-y-6">
+          {/* Header */}
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="inline-flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-800">
+                  Lobby
+                </span>
+                <ConnectionPill status={connectionStatus} />
+              </div>
+              <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                Everyone In?
+              </h1>
+              <p className="mt-1 text-sm text-slate-500">
+                {session?.name ? `${session.name} — participants will appear below as they join.` : "Everyone who joins this table will appear below."}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                navigate(
+                  `/split/ready?splitId=${splitId}&sessionId=${sessionId}&type=${type}${
+                    groupId ? `&groupId=${groupId}` : ""
+                  }`
+                )
+              }
+              className="inline-flex items-center gap-1.5 rounded-2xl border border-zinc-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-2xs hover:bg-zinc-50 transition cursor-pointer"
+            >
+              <FaQrcode />
+              <span>Show QR</span>
+            </button>
           </div>
 
-          {/* Main Card */}
-          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-6 grid grid-cols-3 gap-4 text-center">
-              <div className="rounded-xl bg-emerald-50 p-3">
-                <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                  Participants
-                </p>
-                <p className="text-lg font-bold text-emerald-800">{participants.length} Joined</p>
-              </div>
+          {/* Quick Add Form (For Host) */}
+          {isCurrentUserHost && (
+            <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-2xs">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+                Quick Add Friend (Without QR)
+              </label>
+              <ParticipantEntry
+                participants={[]}
+                onChange={handleAddParticipant}
+                placeholder="Type friend's name and press Enter..."
+              />
+            </div>
+          )}
 
-              <div className="rounded-xl bg-zinc-50 p-3">
-                <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                  Status
-                </p>
-                <p className="text-lg font-bold text-slate-900">waiting</p>
-              </div>
-
-              <div className="rounded-xl bg-zinc-50 p-3">
-                <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                  Split
-                </p>
-                <p className="text-lg font-bold text-slate-900 truncate">{splitName}</p>
+          {/* Participants Card */}
+          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xs">
+            <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
+                <FaUsers className="text-emerald-500" />
+                <span>Participants ({uniqueParticipants.length})</span>
               </div>
             </div>
 
-            <div className="space-y-3">
-              {participants.map((participant) => (
-                <div
-                  key={participant.id}
-                  className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 p-4"
-                >
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={`flex h-10 w-10 items-center justify-center rounded-full ${participant.color}`}
-                    >
-                      <span
-                        className={`text-sm font-bold ${participant.textColor}`}
-                      >
-                        {participant.initial}
-                      </span>
-                    </span>
-                    <p className="font-semibold text-slate-900">
-                      {participant.name}
-                    </p>
-                  </div>
-
-                  {participant.isHost && (
-                    <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-600">
-                      Host
-                    </span>
-                  )}
+            <div className="mt-4">
+              {loading ? (
+                <ParticipantListSkeleton />
+              ) : uniqueParticipants.length === 0 ? (
+                <div className="py-10 text-center text-slate-400">
+                  <p className="text-sm font-medium">Waiting for participants to join...</p>
                 </div>
-              ))}
-            </div>
-
-            <div className="mt-8 space-y-3">
-              {isCurrentUserHost ? (
-                <button onClick={handleContinueToScan} className="w-full rounded-xl bg-emerald-400 py-3 text-sm font-bold text-slate-950 shadow-sm transition-colors hover:bg-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2">
-                  Continue to Scan Bill
-                </button>
               ) : (
-                <div className="flex items-center justify-center gap-2 rounded-xl bg-zinc-100 py-3 text-sm font-semibold text-slate-500">
-                  <FaSpinner className="animate-spin" />
-                  Waiting for host to continue...
+                <div className="space-y-2.5">
+                  {uniqueParticipants.map((p, idx) => {
+                    const colorClass =
+                      AVATAR_PALETTE[idx % AVATAR_PALETTE.length];
+                    return (
+                      <div
+                        key={p.id}
+                        className="flex items-center justify-between rounded-2xl border border-zinc-100 bg-zinc-50/60 p-3.5 transition hover:border-zinc-200"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`flex h-9 w-9 items-center justify-center rounded-full border text-xs font-bold ${colorClass}`}
+                          >
+                            {getInitials(p.name)}
+                          </span>
+                          <div>
+                            <span className="text-sm font-bold text-slate-900">
+                              {p.name}
+                            </span>
+                            {p.isYou && (
+                              <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                                You
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {p.isHost ? (
+                          <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-[11px] font-bold text-white">
+                            Host
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-zinc-200 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600">
+                            Joined
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
-              <button onClick={handleLeave} className="w-full rounded-xl bg-red-900 py-3 text-sm font-bold text-white transition-colors hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2">
-                Leave
-              </button>
             </div>
           </div>
         </div>
       </main>
+
+      {/* Sticky Bottom Bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-zinc-200 bg-white/95 p-3.5 backdrop-blur-md shadow-lg md:left-56">
+        <div className="mx-auto flex max-w-2xl items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-bold text-slate-800">
+              {uniqueParticipants.length} people joined
+            </p>
+            <p className="text-[11px] text-slate-500">
+              {isCurrentUserHost ? "Ready to add bill items" : "Waiting for host to begin"}
+            </p>
+          </div>
+
+          {isCurrentUserHost ? (
+            <LoadingButton
+              size="lg"
+              onClick={handleContinue}
+              icon={<FaArrowRight />}
+            >
+              Scan & Add Items
+            </LoadingButton>
+          ) : (
+            <span className="text-xs font-semibold text-slate-500">
+              Waiting for host...
+            </span>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

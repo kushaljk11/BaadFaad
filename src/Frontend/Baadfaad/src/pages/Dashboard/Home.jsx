@@ -1,44 +1,49 @@
 /**
  * @fileoverview Dashboard Home Page
- * @description Main authenticated dashboard showing the user's recent splits.
- *              Features:
- *              - Animated hero welcome banner with user's name
- *              - "New Split" and "Join Session" quick-action buttons
- *              - Cards for each split displaying title, status, date, and total
- *              - Settlement and Nudge action buttons per split
- *              - Empty state prompt when no splits exist
- *              Uses the Dashboard SideBar + TopBar layout.
+ * @description Consumer-facing, action-oriented dashboard for BaadFaad.
+ *              Key Features:
+ *              - Primary action CTA: "Split a Bill"
+ *              - Clear, unambiguous balance cards: "You Owe" vs "You are Owed"
+ *              - Recent splits with canonical रु currency and StatusBadge
+ *              - Contextual skeletons and polished empty states
  *
  * @module pages/Dashboard/Home
  */
-import { useState, useEffect } from "react";
+
+import React, { useState, useEffect } from "react";
 import {
-  FaBolt,
-  FaCalendarAlt,
-  FaEllipsisV,
+  FaReceipt,
+  FaQrcode,
+  FaUserFriends,
+  FaArrowRight,
+  FaHandHoldingUsd,
+  FaMoneyCheckAlt,
   FaFileExport,
-  FaPlusCircle,
-  FaShoppingCart,
-  FaUtensils,
-  FaUsers,
 } from "react-icons/fa";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import SideBar from "../../components/layout/Dashboard/SideBar";
 import TopBar from "../../components/layout/Dashboard/TopBar";
 import api from "../../config/config";
-
-const ICONS = [FaUtensils, FaCalendarAlt, FaBolt, FaShoppingCart];
-const ICON_BGS = ["bg-emerald-100", "bg-blue-100", "bg-emerald-100", "bg-amber-100"];
+import { formatNPR } from "../../utills/formatNPR";
+import {
+  StatusBadge,
+  EmptyState,
+  SplitCardSkeleton,
+  BalanceCardSkeleton,
+} from "../../components/common/primitives";
+import { useAuth } from "../../context/authState";
 
 export default function Home() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [recentSplits, setRecentSplits] = useState([]);
-  const [lastPaid, setLastPaid] = useState(null);
-  const [monthlySpending, setMonthlySpending] = useState(0);
-  const [prevMonthSpending, setPrevMonthSpending] = useState(0);
+  const [youOwe, setYouOwe] = useState(0);
+  const [youAreOwed, setYouAreOwed] = useState(0);
 
   useEffect(() => {
-    const fetchSplits = async () => {
+    const fetchDashboardData = async () => {
       try {
         const userData = JSON.parse(localStorage.getItem("user") || "{}");
         const userId = userData._id || userData.id;
@@ -46,227 +51,246 @@ export default function Home() {
         const res = await api.get(url);
         const splits = res.data.splits || [];
 
-        // --- Recent Splits (top 5) ---
-        const mapped = splits.slice(0, 5).map((s, i) => ({
-          id: s._id || s.id || `split-${i}-${(s.name||s.sessionName||s.notes||'').replace(/\s+/g,'-')}`,
-          title: s.name || s.sessionName || s.notes || s.receipt?.restaurant || `Split #${i + 1}`,
-          date: new Date(s.createdAt).toLocaleDateString("en-US", { day: "numeric", month: "short" }),
-          members: `${s.breakdown?.length || 0} participants`,
-          amount: `Rs. ${(s.totalAmount || 0).toLocaleString()}`,
-          status: s.status === "finalized" ? "SETTLED" : "PENDING",
-          statusStyle:
-            s.status === "finalized"
-              ? "bg-emerald-100 text-emerald-700"
-              : "bg-amber-100 text-amber-700",
-          icon: ICONS[i % ICONS.length],
-          iconBg: ICON_BGS[i % ICON_BGS.length],
-        }));
-        setRecentSplits(mapped);
+        // Compute balances: You Owe vs You Are Owed
+        let totalOwed = 0;
+        let totalDueToMe = 0;
 
-        // --- Last Time You Paid (most recent finalized split) ---
-        const finalized = splits.filter((s) => s.status === "finalized");
-        if (finalized.length > 0) {
-          const last = finalized[0];
-          setLastPaid({
-            amount: last.totalAmount || 0,
-            label: last.name || last.sessionName || last.notes || last.receipt?.restaurant || "a split",
-            date: new Date(last.createdAt).toLocaleDateString("en-US", {
-              month: "long",
-              day: "numeric",
-              year: "numeric",
-            }),
+        splits.forEach((s) => {
+          const breakdown = s.breakdown || [];
+          const isCreator = String(s.createdBy?._id || s.createdBy) === String(userId);
+
+          breakdown.forEach((entry) => {
+            const entryUserId = String(entry.user?._id || entry.user || entry._id);
+            const share = Number(entry.amount || 0);
+            const paid = Number(entry.amountPaid || 0);
+            const diff = share - paid;
+
+            if (entryUserId === String(userId)) {
+              if (diff > 0) totalOwed += diff;
+            } else if (isCreator) {
+              if (diff > 0) totalDueToMe += diff;
+            }
           });
-        }
-        // If no finalized splits, lastPaid stays null → shows N/A
+        });
 
-        // --- Monthly Spending (current month vs previous month) ---
-        const now = new Date();
-        const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-
-        let thisMonth = 0;
-        let prevMonth = 0;
-        for (const s of splits) {
-          const d = new Date(s.createdAt);
-          const amt = s.totalAmount || 0;
-          if (d >= thisMonthStart) {
-            thisMonth += amt;
-          } else if (d >= prevMonthStart && d < thisMonthStart) {
-            prevMonth += amt;
-          }
-        }
-        setMonthlySpending(thisMonth);
-        setPrevMonthSpending(prevMonth);
+        setYouOwe(totalOwed);
+        setYouAreOwed(totalDueToMe);
+        setRecentSplits(splits.slice(0, 8));
       } catch (err) {
-        // If API fails, show empty state
+        console.error("Dashboard fetch error:", err);
+      } finally {
+        setLoading(false);
       }
     };
-    fetchSplits();
+
+    fetchDashboardData();
   }, []);
 
-  // Calculate percentage change
-  const spendingChange = prevMonthSpending > 0
-    ? Math.round(((monthlySpending - prevMonthSpending) / prevMonthSpending) * 100)
-    : monthlySpending > 0
-      ? 100
-      : 0;
-
-  const currentMonthLabel = new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const userName = user?.name?.split(" ")[0] || "Friend";
 
   return (
-    <div className="flex min-h-screen bg-zinc-100">
-      <TopBar onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)} isOpen={isMobileMenuOpen} />
-      <SideBar isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
+    <div className="flex min-h-screen bg-zinc-50">
+      <TopBar
+        onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        isOpen={isMobileMenuOpen}
+      />
+      <SideBar
+        isOpen={isMobileMenuOpen}
+        onClose={() => setIsMobileMenuOpen(false)}
+      />
 
-      <main className="ml-0 flex-1 p-6 pt-24 md:ml-56 md:p-8 md:pt-8 sm:mt-14">
-        <div className="rounded-4xl bg-linear-to-r from-emerald-900 via-teal-900 to-slate-900 px-8 py-10 text-white shadow-xl">
-          <h1 className="text-4xl font-bold">Start New Split</h1>
-          <p className="mt-4 max-w-2xl text-lg text-slate-200">
-            Split bills with friends in seconds. No more awkward "who owes who"
-            conversations.
-          </p>
+      <main className="ml-0 flex-1 px-4 py-6 pt-20 md:ml-56 md:px-8 md:pt-6">
+        <div className="mx-auto max-w-5xl space-y-6">
+          {/* Welcome & Primary Action Hero */}
+          <section className="relative overflow-hidden rounded-3xl bg-linear-to-br from-slate-950 via-slate-900 to-emerald-950 p-6 text-white shadow-sm sm:p-8">
+            <div className="relative z-10 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="inline-block rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-bold text-emerald-400">
+                  Start New Split
+                </h2>
+                <h1 className="mt-2 text-2xl font-bold tracking-tight text-white sm:text-4xl">
+                  Namaste, {userName}!
+                </h1>
+                <p className="mt-1 text-sm text-slate-300 sm:text-base">
+                  Ready to split a meal or settlement? It takes under 30 seconds.
+                </p>
+              </div>
 
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              to="/split/create"
-              className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-6 py-3 text-lg font-bold text-slate-950 hover:bg-emerald-300 transition"
-            >
-              <FaPlusCircle />
-              Create Split
-            </Link>
-            <Link
-              to="/join-session"
-              className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-6 py-3 text-lg font-semibold text-white backdrop-blur hover:bg-white/20 transition"
-            >
-              <FaUsers />
-              Join Split
-            </Link>
-          </div>
-        </div>
-
-        <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[2fr_1fr]">
-          <div className="space-y-6">
-            <section className="rounded-4xl border border-zinc-200 bg-white p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-500">
-                    <FaShoppingCart />
-                  </span>
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
-                      Last Time You Paid
-                    </p>
-                    {lastPaid ? (
-                      <>
-                        <p className="text-2xl font-bold text-slate-900">
-                          Rs. {lastPaid.amount.toLocaleString()} for {lastPaid.label}
-                        </p>
-                        <p className="text-sm text-slate-600">on {lastPaid.date}</p>
-                      </>
-                    ) : (
-                      <p className="text-lg font-semibold text-slate-600">N/A</p>
-                    )}
-                  </div>
-                </div>
-                <button type="button" className="text-slate-600" aria-label="More payment details">
-                  <FaEllipsisV />
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => navigate("/split/create")}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-emerald-500 px-6 py-3.5 text-sm font-bold text-slate-950 transition-all hover:bg-emerald-400 active:scale-95 shadow-md cursor-pointer"
+                >
+                  <FaReceipt className="text-base" />
+                  <span>Split a Bill</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate("/join-session")}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-5 py-3.5 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/20 active:scale-95 cursor-pointer"
+                >
+                  <FaQrcode className="text-base" />
+                  <span>Join with QR</span>
                 </button>
               </div>
-            </section>
+            </div>
+          </section>
 
-            <section className="rounded-4xl border border-zinc-200 bg-white p-6">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold text-slate-600">
-                    Monthly Spending
-                  </p>
-                  <div className="mt-1 flex items-end gap-3">
-                    <p className="text-3xl font-bold text-slate-900">
-                      Rs. {monthlySpending.toLocaleString()}
-                    </p>
-                    {spendingChange !== 0 && (
-                      <span
-                        className={`text-sm font-bold ${
-                          spendingChange > 0 ? "text-red-500" : "text-emerald-500"
-                        }`}
-                      >
-                        {spendingChange > 0 ? "+" : ""}
-                        {spendingChange}%
-                      </span>
-                    )}
+          {/* Unambiguous Financial Balance Cards */}
+          <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {loading ? (
+              <>
+                <BalanceCardSkeleton />
+                <BalanceCardSkeleton />
+              </>
+            ) : (
+              <>
+                {/* You Owe Card */}
+                <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                      Total You Owe
+                    </span>
+                    <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-red-50 text-red-500">
+                      <FaMoneyCheckAlt className="text-sm" />
+                    </span>
                   </div>
+                  <p className="mt-3 text-3xl font-black text-slate-900 tracking-tight">
+                    {formatNPR(youOwe)}
+                  </p>
+                  <p className="mt-2 text-xs font-medium text-slate-500">
+                    {youOwe > 0
+                      ? "Pending payments for shared expenses"
+                      : "You have no outstanding dues!"}
+                  </p>
                 </div>
-                <span className="rounded-full bg-zinc-100 px-4 py-2 text-sm font-semibold text-slate-600">
-                  {currentMonthLabel}
-                </span>
-              </div>
 
-              <div className="mt-24">
-                <div className="grid grid-cols-7 text-center text-xs font-semibold text-slate-600">
-                  <span>Mon</span>
-                  <span>Tue</span>
-                  <span>Wed</span>
-                  <span>Thu</span>
-                  <span>Fri</span>
-                  <span>Sat</span>
-                  <span>Sun</span>
+                {/* You Are Owed Card */}
+                <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                      You are Owed
+                    </span>
+                    <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                      <FaHandHoldingUsd className="text-sm" />
+                    </span>
+                  </div>
+                  <p className="mt-3 text-3xl font-black text-emerald-600 tracking-tight">
+                    {formatNPR(youAreOwed)}
+                  </p>
+                  <p className="mt-2 text-xs font-medium text-slate-500">
+                    {youAreOwed > 0
+                      ? "Friends owe you for bills you covered"
+                      : "All group members are settled up!"}
+                  </p>
                 </div>
+              </>
+            )}
+          </section>
+
+          {/* Quick Actions Bar */}
+          <section className="flex flex-wrap items-center gap-3">
+            <Link
+              to="/group"
+              className="inline-flex items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-2xs transition hover:bg-zinc-50"
+            >
+              <FaUserFriends className="text-emerald-500" />
+              <span>Manage Groups</span>
+            </Link>
+          </section>
+
+          {/* Recent Splits List */}
+          <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xs">
+            <div className="flex items-center justify-between border-b border-zinc-100 pb-4">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Recent Splits</h2>
+                <p className="text-xs text-slate-500">Track and settle ongoing bills</p>
               </div>
-            </section>
-          </div>
-
-          <aside className="rounded-4xl border border-zinc-200 bg-white p-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-slate-900">Recent Splits</h2>
-              <button type="button" className="text-sm font-bold text-emerald-800">
-                View All
-              </button>
-            </div>
-
-            <div className="mt-5 space-y-5">
-              {recentSplits.map((split) => {
-                const Icon = split.icon;
-
-                return (
-                    <article
-                      key={split.id}
-                    className="flex items-start justify-between gap-3"
-                  >
-                    <div className="flex items-start gap-3">
-                      <span
-                        className={`mt-1 flex h-10 w-10 items-center justify-center rounded-full text-slate-700 ${split.iconBg}`}
-                      >
-                        <Icon className="text-sm" />
-                      </span>
-                      <div>
-                        <p className="font-bold text-slate-900">{split.title}</p>
-                        <p className="text-xs text-slate-600">{split.date}</p>
-                        <p className="text-xs text-slate-600">{split.members}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-slate-900">{split.amount}</p>
-                      <span
-                        className={`mt-1 inline-block rounded-full px-2 py-1 text-[10px] font-bold ${split.statusStyle}`}
-                      >
-                        {split.status}
-                      </span>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-
-            <div className="mt-6 border-t border-zinc-100 pt-5">
               <button
                 type="button"
-                className="flex w-full items-center justify-center gap-2 rounded-full bg-emerald-100 px-5 py-3 font-bold text-slate-700"
+                onClick={() => navigate("/split/create")}
+                className="text-xs font-bold text-emerald-800 hover:text-emerald-900 cursor-pointer"
               >
-                <FaFileExport />
-                Export History
+                + New Split
               </button>
             </div>
-          </aside>
+
+            <div className="mt-4">
+              {loading ? (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <SplitCardSkeleton />
+                  <SplitCardSkeleton />
+                </div>
+              ) : recentSplits.length === 0 ? (
+                <EmptyState
+                  icon={FaReceipt}
+                  heading="No splits yet"
+                  description="Split your first meal or bill with friends in just a few taps."
+                  action={
+                    <button
+                      type="button"
+                      onClick={() => navigate("/split/create")}
+                      className="inline-flex items-center gap-2 rounded-2xl bg-emerald-500 px-5 py-2.5 text-sm font-bold text-slate-950 transition hover:bg-emerald-400"
+                    >
+                      <span>Split a Bill</span>
+                      <FaArrowRight className="text-xs" />
+                    </button>
+                  }
+                />
+              ) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {recentSplits.map((split) => {
+                    const title =
+                      split.name ||
+                      split.sessionName ||
+                      split.notes ||
+                      split.receipt?.restaurant ||
+                      "Bill Split";
+                    const participantCount = split.breakdown?.length || 0;
+                    const dateFormatted = new Date(split.createdAt).toLocaleDateString(
+                      "en-US",
+                      { month: "short", day: "numeric" }
+                    );
+
+                    return (
+                      <article
+                        key={split._id || split.id}
+                        onClick={() =>
+                          navigate(`/split/breakdown?splitId=${split._id || split.id}`)
+                        }
+                        className="group flex flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-4.5 transition-all hover:border-emerald-300 hover:shadow-sm cursor-pointer"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                              <FaReceipt className="text-sm" />
+                            </span>
+                            <div>
+                              <p className="text-sm font-bold text-slate-900 group-hover:text-emerald-600 transition-colors line-clamp-1">
+                                {title}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                {dateFormatted} • {participantCount} people
+                              </p>
+                            </div>
+                          </div>
+                          <StatusBadge status={split.status} />
+                        </div>
+
+                        <div className="mt-3 flex items-center justify-between border-t border-zinc-100 pt-2.5 text-xs">
+                          <span className="text-slate-500">Bill Total</span>
+                          <span className="font-bold text-slate-900">
+                            {formatNPR(split.totalAmount)}
+                          </span>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </section>
         </div>
       </main>
     </div>

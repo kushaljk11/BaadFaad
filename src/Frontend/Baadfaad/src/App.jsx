@@ -17,7 +17,8 @@ import { useAuth } from './context/authState'
 import ProtectedRoute from './components/common/ProtectedRoute'
 import PublicRoute from './components/common/PublicRoute'
 import Loader from './components/common/Loader'
-import { ErrorBoundary } from './components/common/primitives'
+import useNetworkStatus from './hooks/useNetworkStatus'
+import { ErrorBoundary, OfflineBanner } from './components/common/primitives'
 
 const AboutUs = lazy(() => import('./pages/landing/AboutUs'))
 const Contact = lazy(() => import('./pages/landing/Contact'))
@@ -47,6 +48,7 @@ const LOADER = (
 
 function AppContent() {
   const { isLoading } = useAuth();
+  const isOnline = useNetworkStatus();
 
   if (isLoading) {
     return (
@@ -57,10 +59,12 @@ function AppContent() {
   }
 
   return (
-    <Router>
-      <ErrorBoundary>
-        <Suspense fallback={LOADER}>
-          <Routes>
+    <>
+      {!isOnline && <OfflineBanner />}
+      <Router>
+        <ErrorBoundary>
+          <Suspense fallback={LOADER}>
+            <Routes>
             {/* Public Routes */}
             <Route path="/" element={<Landing />} />
             <Route path="/about" element={<AboutUs />} />
@@ -90,8 +94,9 @@ function AppContent() {
             <Route path="/group/details" element={<ProtectedRoute><Group /></ProtectedRoute>} />
           </Routes>
         </Suspense>
-      </ErrorBoundary>
-    </Router>
+        </ErrorBoundary>
+      </Router>
+    </>
   );
 }
 

@@ -1,20 +1,32 @@
 /**
  * @fileoverview Ready To Split / Waiting Room Page
- * @description Displays the session QR code and share link so participants
- *              can join. Shows the live participant count via Socket.IO.
- *              The host can proceed when enough people have joined.
- *              Uses the Dashboard SideBar + TopBar layout.
+ * @description Displays the session QR code and share options.
+ *              Key Features:
+ *              - High contrast QR display with camera focus frame
+ *              - Copy link & native mobile Share API
+ *              - Real-time live count with ConnectionPill
+ *              - Host navigation to lobby or bill scanning
  *
  * @module pages/split/ReadyToSplit
  */
-import { useState, useEffect, useCallback } from "react";
+
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useAuth } from '../../context/authState';
+import { useAuth } from "../../context/authState";
 import SideBar from "../../components/layout/Dashboard/SideBar";
 import TopBar from "../../components/layout/Dashboard/TopBar";
-import { FaArrowRight, FaCopy, FaQrcode, FaSpinner } from "react-icons/fa";
+import {
+  FaArrowRight,
+  FaCopy,
+  FaCheck,
+  FaShareAlt,
+  FaQrcode,
+  FaCamera,
+} from "react-icons/fa";
 import api from "../../config/config";
 import useSessionSocket from "../../hooks/useSessionSocket";
+import { ConnectionPill, SkeletonCard } from "../../components/common/primitives";
+import LoadingButton from "../../components/common/LoadingButton";
 
 export default function ReadyToSplit() {
   const navigate = useNavigate();
@@ -32,184 +44,246 @@ export default function ReadyToSplit() {
   const inviteToken = searchParams.get("invite");
   const { isAuthenticated } = useAuth();
 
-  useEffect(() => {
-    const fetchSession = async () => {
-      if (!sessionId) {
-        setLoading(false);
-        return;
-      }
-      
-      try {
-        const response = await api.get(`/session/${sessionId}`);
-        setSession(response.data);
+  const fetchSession = useCallback(async () => {
+    if (!sessionId) {
+      setLoading(false);
+      return;
+    }
 
-        if ((groupId || type === 'group') && groupId) {
-          try {
-            const groupRes = await api.get(`/groups/${groupId}`);
-            const groupData = groupRes.data?.data || groupRes.data;
-            setGroup(groupData);
-          } catch (groupErr) {
-            // Non-fatal: fallback to session QR if group fetch fails.
-            console.warn("Failed to fetch group QR:", groupErr);
-          }
+    try {
+      const response = await api.get(`/session/${sessionId}`);
+      setSession(response.data);
+
+      if ((groupId || type === "group") && groupId) {
+        try {
+          const groupRes = await api.get(`/groups/${groupId}`);
+          const groupData = groupRes.data?.data || groupRes.data;
+          setGroup(groupData);
+        } catch (groupErr) {
+          console.warn("Failed to fetch group QR:", groupErr);
         }
-      } catch (err) {
-        console.error("Failed to fetch session:", err);
-      } finally {
-        setLoading(false);
       }
-    };
-
-    fetchSession();
+    } catch (err) {
+      console.error("Failed to fetch session:", err);
+    } finally {
+      setLoading(false);
+    }
   }, [sessionId, groupId, type]);
 
+  useEffect(() => {
+    fetchSession();
+  }, [fetchSession]);
+
   const handleParticipantJoined = useCallback((data) => {
-    // Socket payload contains `participants` (flattened) and `newParticipant`.
-    // Prefer updating participants in-place to avoid a full refetch.
     if (data?.participants) {
       setSession((prev) => ({ ...(prev || {}), participants: data.participants }));
       return;
     }
-
-    // Fallback: if server sent a whole session object, replace it.
     if (data?.session) {
       setSession(data.session);
-      return;
     }
-  }, [setSession]);
+  }, []);
 
-  useSessionSocket(sessionId, handleParticipantJoined);
+  const { connectionStatus } = useSessionSocket(
+    sessionId,
+    handleParticipantJoined,
+    null,
+    null,
+    fetchSession
+  );
 
   const splitName = session?.name || "Split Session";
 
-  const handleCopyLink = () => {
-    const link = (groupId || type === 'group')
-      ? `${window.location.origin}/group/join?groupId=${groupId || ''}&splitId=${splitId}&type=group&invite=${encodeURIComponent(inviteToken || '')}`
-      : `${window.location.origin}/session/join?splitId=${splitId}&sessionId=${sessionId}&type=session&invite=${encodeURIComponent(inviteToken || '')}`;
-    navigator.clipboard.writeText(link);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const getJoinLink = () => {
+    return groupId || type === "group"
+      ? `${window.location.origin}/group/join?groupId=${groupId || ""}&splitId=${splitId}&type=group&invite=${encodeURIComponent(
+          inviteToken || ""
+        )}`
+      : `${window.location.origin}/session/join?splitId=${splitId}&sessionId=${sessionId}&type=session&invite=${encodeURIComponent(
+          inviteToken || ""
+        )}`;
+  };
+
+  const handleCopyLink = async () => {
+    const link = getJoinLink();
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch (e) {
+      console.warn("Clipboard copy failed", e);
+    }
+  };
+
+  const handleNativeShare = async () => {
+    const link = getJoinLink();
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Join ${splitName} on BaadFaad`,
+          text: `Join our bill split for ${splitName}:`,
+          url: link,
+        });
+      } catch (e) {
+        // Share dismissed
+      }
+    } else {
+      handleCopyLink();
+    }
   };
 
   const handleGoToLobby = () => {
-    // If the visitor is not authenticated and this is a public session link,
-    // send them to the public join page where they can join as guest by name.
-    if (!isAuthenticated && (type === 'session' || !type && !groupId)) {
-      // go to public session join
-      navigate(`/session/join?splitId=${splitId}&sessionId=${sessionId}&invite=${encodeURIComponent(inviteToken || '')}`);
+    if (!isAuthenticated && (type === "session" || (!type && !groupId))) {
+      navigate(
+        `/session/join?splitId=${splitId}&sessionId=${sessionId}&invite=${encodeURIComponent(
+          inviteToken || ""
+        )}`
+      );
       return;
     }
 
-    // Authenticated host/participant: navigate to lobby
-    navigate(`/split/joined?splitId=${splitId}&sessionId=${sessionId}&type=${type || (groupId ? 'group' : 'session')}${groupId ? `&groupId=${groupId}` : ''}`);
+    navigate(
+      `/split/joined?splitId=${splitId}&sessionId=${sessionId}&type=${
+        type || (groupId ? "group" : "session")
+      }${groupId ? `&groupId=${groupId}` : ""}`
+    );
   };
 
   const qrCodeImage =
-    (groupId || type === 'group')
-      ? group?.qrCode || session?.qrCode
-      : session?.qrCode;
+    groupId || type === "group" ? group?.qrCode || session?.qrCode : session?.qrCode;
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen bg-zinc-50">
-        <TopBar onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)} isOpen={isMobileMenuOpen} />
-        <SideBar isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} disableInteraction={true} />
-        <main className="ml-0 flex-1 px-8 py-6 pt-24 md:ml-56 md:pt-6 sm:mt-12 flex items-center justify-center">
-          <FaSpinner className="animate-spin text-4xl text-emerald-500" />
-        </main>
-      </div>
-    );
-  }
+  const participantCount = session?.participants?.length || 0;
 
   return (
     <div className="flex min-h-screen bg-zinc-50">
-      <TopBar onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)} isOpen={isMobileMenuOpen} />
-      <SideBar isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} disableInteraction={true} />
-      <main className="ml-0 flex-1 px-8 py-6 pt-24 md:ml-56 md:pt-6 sm:mt-12">
-        <div className="mx-auto max-w-xl">
-          <div className="mb-6 text-center">
-            <h1 className="text-3xl font-bold text-slate-900">Ready to Split!</h1>
-            <p className="mt-2 text-base text-slate-500">
-              Ask your friends to scan this code to join the split instantly.
+      <TopBar
+        onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        isOpen={isMobileMenuOpen}
+      />
+      <SideBar
+        isOpen={isMobileMenuOpen}
+        onClose={() => setIsMobileMenuOpen(false)}
+        disableInteraction={true}
+      />
+
+      <main className="ml-0 flex-1 px-4 py-6 pt-20 md:ml-56 md:px-8 md:pt-6">
+        <div className="mx-auto max-w-lg space-y-6">
+          {/* Header */}
+          <div className="text-center">
+            <div className="inline-flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-emerald-600">
+                Share & Join
+              </span>
+              <ConnectionPill status={connectionStatus} />
+            </div>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+              Ready to Split!
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Ask friends at the table to scan or open your invite link.
             </p>
           </div>
 
-          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-4 text-center">
-              <span className="inline-block rounded-full bg-emerald-100 px-4 py-1 text-xs font-bold tracking-wider text-emerald-600">
-                ACTIVE SESSION
-              </span>
-              <h2 className="mt-3 text-2xl font-bold text-slate-900">
-                {splitName}
-              </h2>
-            </div>
+          {loading ? (
+            <SkeletonCard lines={6} />
+          ) : (
+            <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xs text-center space-y-5 sm:p-8">
+              <div>
+                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 border border-emerald-200">
+                  {type === "group" ? "GROUP SPLIT" : "LIVE SESSION"}
+                </span>
+                <h2 className="mt-2 text-xl font-bold text-slate-900">{splitName}</h2>
+              </div>
 
-            <div className="relative mx-auto w-fit">
-              <div className="absolute -left-3 -top-3 h-8 w-8 border-l-4 border-t-4 border-emerald-400 rounded-tl-xl"></div>
-              <div className="absolute -right-3 -top-3 h-8 w-8 border-r-4 border-t-4 border-emerald-400 rounded-tr-xl"></div>
-              <div className="absolute -bottom-3 -left-3 h-8 w-8 border-b-4 border-l-4 border-emerald-400 rounded-bl-xl"></div>
-              <div className="absolute -bottom-3 -right-3 h-8 w-8 border-b-4 border-r-4 border-emerald-400 rounded-br-xl"></div>
-              
-              <div className="rounded-2xl bg-linear-to-br from-emerald-50 to-teal-50 p-6">
-                <div className="rounded-xl bg-white p-4 shadow-md">
-                  {qrCodeImage ? (
-                    <img 
-                      src={qrCodeImage} 
-                      alt="Session QR Code" 
-                      className="mx-auto h-36 w-36 rounded-lg"
-                    />
-                  ) : (
-                    <div className="mx-auto flex h-36 w-36 items-center justify-center rounded-lg bg-zinc-100">
-                      <FaQrcode className="text-5xl text-slate-400" />
-                    </div>
-                  )}
-                  <p className="mt-3 text-center text-xs text-slate-400">
-                    Scan to join this split session
+              {/* QR Code Container */}
+              <div className="relative mx-auto w-fit">
+                <div className="rounded-3xl bg-linear-to-b from-emerald-50 to-teal-50 p-6 shadow-inner border border-emerald-100">
+                  <div className="rounded-2xl bg-white p-3 shadow-md">
+                    {qrCodeImage ? (
+                      <img
+                        src={qrCodeImage}
+                        alt="Session QR Code"
+                        className="mx-auto h-44 w-44 rounded-xl object-contain"
+                      />
+                    ) : (
+                      <div className="mx-auto flex h-44 w-44 items-center justify-center rounded-xl bg-zinc-100 text-zinc-400">
+                        <FaQrcode className="text-5xl" />
+                      </div>
+                    )}
+                  </div>
+                  <p className="mt-2.5 text-[11px] font-semibold text-slate-500">
+                    Scan with any phone camera
                   </p>
                 </div>
               </div>
-            </div>
 
-            <div className="mt-5 flex items-center justify-center gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500"></span>
-                <span className="font-semibold text-slate-600">Live Update</span>
+              {/* Participant Joined Indicator */}
+              <div className="rounded-2xl bg-zinc-50 p-3.5 flex items-center justify-between border border-zinc-200 text-xs">
+                <span className="font-semibold text-slate-600">People in Room</span>
+                <span className="font-black text-emerald-600 text-sm">
+                  {participantCount} Joined
+                </span>
               </div>
-              <span className="font-bold text-emerald-600">
-                {session?.participants?.length || 0} Joined
-              </span>
-            </div>
 
-            <div className="mt-5 text-center">
-              <div className="mb-3 flex items-center justify-center gap-2">
-                <span className="h-10 w-10 rounded-full bg-orange-200"></span>
-                <span className="h-10 w-10 rounded-full border-2 border-dashed border-zinc-300 bg-zinc-50"></span>
+              {/* Share & Copy Row */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  className="flex items-center justify-center gap-2 rounded-2xl border border-zinc-300 bg-white py-3 text-xs font-bold text-slate-700 hover:bg-zinc-50 active:scale-95 transition cursor-pointer"
+                >
+                  {copied ? (
+                    <>
+                      <FaCheck className="text-emerald-600" />
+                      <span className="text-emerald-700">Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <FaCopy />
+                      <span>Copy Link</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleNativeShare}
+                  className="flex items-center justify-center gap-2 rounded-2xl border border-zinc-300 bg-white py-3 text-xs font-bold text-slate-700 hover:bg-zinc-50 active:scale-95 transition cursor-pointer"
+                >
+                  <FaShareAlt />
+                  <span>Share Link</span>
+                </button>
               </div>
-              <p className="text-sm text-slate-400">
-                Waiting for your friends to scan...
-              </p>
+
+              {/* Action Buttons */}
+              <div className="space-y-2.5 pt-2">
+                <LoadingButton
+                  fullWidth
+                  size="lg"
+                  variant="primary"
+                  onClick={handleGoToLobby}
+                  icon={<FaArrowRight />}
+                >
+                  Enter Live Room
+                </LoadingButton>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate(
+                      `/split/scan?splitId=${splitId}&sessionId=${sessionId}&type=${
+                        type || (groupId ? "group" : "session")
+                      }${groupId ? `&groupId=${groupId}` : ""}`
+                    )
+                  }
+                  className="w-full flex items-center justify-center gap-2 py-3 text-xs font-bold text-slate-600 hover:text-slate-900 cursor-pointer"
+                >
+                  <FaCamera />
+                  <span>Scan or Enter Bill Receipt</span>
+                </button>
+              </div>
             </div>
-          </div>
-
-          <div className="mt-5 space-y-3">
-            <button
-              type="button"
-              onClick={handleGoToLobby}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-emerald-400 px-8 py-4 text-base font-bold text-white shadow-lg shadow-emerald-300/40 transition hover:bg-emerald-500"
-            >
-              Go to Live Split Room
-              <FaArrowRight className="text-sm" />
-            </button>
-
-            <button
-              type="button"
-              onClick={handleCopyLink}
-              className="flex w-full items-center justify-center gap-2 rounded-full border border-zinc-300 bg-white px-8 py-3 text-sm font-semibold text-slate-600 transition hover:bg-zinc-50"
-            >
-              <FaCopy className="text-xs" />
-              {copied ? 'Copied!' : 'Copy Split Link'}
-            </button>
-          </div>
+          )}
         </div>
       </main>
     </div>

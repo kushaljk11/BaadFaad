@@ -331,8 +331,9 @@ export default function Settlement() {
                             </span>
                             <button
                               type="button"
+                              onClick={() => navigate(`/group/${groupId}/nudge?recipient=${encodeURIComponent(person.name)}`)}
                               aria-label={`Send nudge to ${person.name}`}
-                              className="inline-flex items-center gap-1 rounded-full border border-zinc-300 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-500 hover:bg-zinc-100"
+                              className="inline-flex items-center gap-1 rounded-full border border-zinc-300 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-700 hover:bg-zinc-100 cursor-pointer"
                             >
                               <FaPaperPlane className="text-[9px]" aria-hidden="true" /> Send Nudge
                             </button>
@@ -365,23 +366,23 @@ export default function Settlement() {
                       </div>
                       <dl className="grid grid-cols-3 gap-2 text-center">
                         <div className="rounded-xl bg-zinc-50 px-2 py-2">
-                          <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Share</dt>
+                          <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-600">Share</dt>
                           <dd className="mt-0.5 text-sm font-bold text-slate-800">{formatNPR(person.share, { showSymbol: false })}</dd>
                         </div>
                         <div className="rounded-xl bg-zinc-50 px-2 py-2">
-                          <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Paid</dt>
-                          <dd className="mt-0.5 text-sm font-bold text-emerald-700">{formatNPR(person.paid, { showSymbol: false })}</dd>
+                          <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-600">Paid</dt>
+                          <dd className="mt-0.5 text-sm font-bold text-emerald-800">{formatNPR(person.paid, { showSymbol: false })}</dd>
                         </div>
                         <div className="rounded-xl bg-zinc-50 px-2 py-2">
-                          <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Due</dt>
-                          <dd className={`mt-0.5 text-sm font-bold ${person.due > 0 ? "text-orange-700" : "text-emerald-700"}`}>{formatNPR(person.due, { showSymbol: false })}</dd>
+                          <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-600">Due</dt>
+                          <dd className={`mt-0.5 text-sm font-bold ${person.due > 0 ? "text-orange-700" : "text-emerald-800"}`}>{formatNPR(person.due, { showSymbol: false })}</dd>
                         </div>
                       </dl>
                       {person.status !== "paid" && (
                         <button
                           type="button"
                           aria-label={`Send nudge to ${person.name}`}
-                          className="flex w-full items-center justify-center gap-2 rounded-full border border-zinc-300 bg-white py-2 text-xs font-semibold text-slate-600 hover:bg-zinc-100"
+                          className="flex w-full items-center justify-center gap-2 rounded-full border border-zinc-300 bg-white py-2 text-xs font-semibold text-slate-700 hover:bg-zinc-100 cursor-pointer"
                         >
                           <FaPaperPlane className="text-[10px]" aria-hidden="true" /> Send Nudge to {person.name}
                         </button>

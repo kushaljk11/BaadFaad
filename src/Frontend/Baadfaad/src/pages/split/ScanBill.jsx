@@ -1,23 +1,36 @@
 /**
  * @fileoverview Scan Bill Page
- * @description Host-only page for uploading or capturing a bill image.
- *              Sends the image to the Gemini AI backend for OCR parsing,
- *              displays extracted items in an editable table, and allows
- *              manual item additions. Non-host participants see a read-only
- *              preview synced in real time via Socket.IO.
- *              Includes a "Table Timer" that auto-navigates after a timeout.
- *              Uses the Dashboard SideBar + TopBar layout.
+ * @description Host and participant page for receipt OCR and itemized entry.
+ *              Key Features:
+ *              - Progressive OCR parsing stages with clear messages
+ *              - Manual item additions with MoneyInput (mobile decimal keyboard)
+ *              - Real-time Socket.IO synchronization of bill items
+ *              - Canonical रु currency formatting via formatNPR
+ *              - Sticky mobile action bar with bill total
  *
  * @module pages/split/ScanBill
  */
-import { useState, useEffect, useCallback } from "react";
+
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import SideBar from "../../components/layout/Dashboard/SideBar";
 import TopBar from "../../components/layout/Dashboard/TopBar";
-import { FaCloudUploadAlt, FaCamera, FaCheckCircle, FaPlusCircle, FaTrash, FaSpinner, FaLock } from "react-icons/fa";
+import {
+  FaCloudUploadAlt,
+  FaCamera,
+  FaCheckCircle,
+  FaPlusCircle,
+  FaTrash,
+  FaSpinner,
+  FaLock,
+  FaArrowRight,
+} from "react-icons/fa";
 import api from "../../config/config";
 import { useAuth } from "../../context/authState";
 import useSessionSocket, { emitItemsUpdate, emitHostNavigate } from "../../hooks/useSessionSocket";
+import { formatNPR } from "../../utills/formatNPR";
+import MoneyInput from "../../components/common/MoneyInput";
+import LoadingButton from "../../components/common/LoadingButton";
 
 const toBase64 = (file) =>
   new Promise((resolve, reject) => {
@@ -45,7 +58,7 @@ const compressImageForUpload = (file) =>
       try {
         const scale = Math.min(
           1,
-          MAX_UPLOAD_DIMENSION / Math.max(img.width || 1, img.height || 1),
+          MAX_UPLOAD_DIMENSION / Math.max(img.width || 1, img.height || 1)
         );
         const targetWidth = Math.max(1, Math.round(img.width * scale));
         const targetHeight = Math.max(1, Math.round(img.height * scale));
@@ -71,12 +84,12 @@ const compressImageForUpload = (file) =>
             const compressedFile = new File(
               [blob],
               file.name.replace(/\.\w+$/, ".jpg"),
-              { type: "image/jpeg" },
+              { type: "image/jpeg" }
             );
             resolve(compressedFile);
           },
           "image/jpeg",
-          JPEG_QUALITY,
+          JPEG_QUALITY
         );
       } catch {
         URL.revokeObjectURL(objectUrl);
@@ -97,10 +110,10 @@ export default function ScanBill() {
   const { user } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [processingStage, setProcessingStage] = useState("");
   const [scannedData, setScannedData] = useState(null);
   const [manualItems, setManualItems] = useState([]);
-  const [participantsList, setParticipantsList] = useState([]);
+  const [_participantsList, setParticipantsList] = useState([]);
   const [itemName, setItemName] = useState("");
   const [itemAssigned, setItemAssigned] = useState([]);
   const [itemPrice, setItemPrice] = useState("");
@@ -114,28 +127,31 @@ export default function ScanBill() {
   const splitId = searchParams.get("splitId");
   const type = searchParams.get("type");
   const groupId = searchParams.get("groupId");
-  const roomId = type === 'group' ? groupId : sessionId;
+  const roomId = type === "group" ? groupId : sessionId;
 
-  // Detect if current user is host (first participant in session)
   useEffect(() => {
     const detectHost = async () => {
-      // If this is a group link, fetch group members and treat group.creator as host
-      if (type === 'group' && groupId) {
+      if (type === "group" && groupId) {
         try {
           const groupRes = await api.get(`/groups/${groupId}`);
           const grp = groupRes.data.data || groupRes.data;
           const members = grp.members || [];
           const normalized = members.map((m) => {
             const id = m._id || m.id || m;
-            const name = m.fullName || m.name || m.email || (m.user && (m.user.fullName || m.user.name)) || `User`;
+            const name =
+              m.fullName ||
+              m.name ||
+              m.email ||
+              (m.user && (m.user.fullName || m.user.name)) ||
+              `User`;
             return { id: String(id), name };
           });
           setParticipantsList(normalized);
-          const currentUserId = String(user?._id || user?.id || '');
-          const creatorId = String(grp.createdBy?._id || grp.createdBy || '');
+          const currentUserId = String(user?._id || user?.id || "");
+          const creatorId = String(grp.createdBy?._id || grp.createdBy || "");
           setIsHost(creatorId === currentUserId);
         } catch (err) {
-          console.error('Failed to load group for ScanBill:', err);
+          console.error("Failed to load group for ScanBill:", err);
           setIsHost(false);
         } finally {
           setHostLoading(false);
@@ -143,9 +159,7 @@ export default function ScanBill() {
         return;
       }
 
-      // session-based detection
       if (!sessionId) {
-        // No session = direct split, user is effectively the host
         setIsHost(true);
         setHostLoading(false);
         return;
@@ -160,11 +174,24 @@ export default function ScanBill() {
           return String(v);
         };
         const currentUserId = normalizeId(user?._id || user?.id);
-        const participants = sessionRes.data?.participants || sessionRes.data?.session?.participants || [];
-        // normalize participants for selection
+        const participants =
+          sessionRes.data?.participants || sessionRes.data?.session?.participants || [];
         const normalized = participants.map((p) => {
-          const id = p.user?._id || p.user?.id || p.participant?._id || p.participant?.id || p._id || p.id;
-          const name = p.name || p.user?.name || p.participant?.name || p.email || p.user?.email || p.participant?.email || `User`;
+          const id =
+            p.user?._id ||
+            p.user?.id ||
+            p.participant?._id ||
+            p.participant?.id ||
+            p._id ||
+            p.id;
+          const name =
+            p.name ||
+            p.user?.name ||
+            p.participant?.name ||
+            p.email ||
+            p.user?.email ||
+            p.participant?.email ||
+            `User`;
           return { id: String(id), name };
         });
         setParticipantsList(normalized);
@@ -175,7 +202,6 @@ export default function ScanBill() {
         }
       } catch (err) {
         console.error("Failed to detect host:", err);
-        // Fallback: assume not host if detection fails
         setIsHost(false);
       } finally {
         setHostLoading(false);
@@ -184,63 +210,56 @@ export default function ScanBill() {
     detectHost();
   }, [sessionId, user, type, groupId]);
 
-  // Socket: participants receive live item updates from host
   const onItemsUpdate = useCallback((data) => {
     if (data?.scannedData !== undefined) setScannedData(data.scannedData);
     if (data?.manualItems !== undefined) setManualItems(data.manualItems);
   }, []);
 
-  // Socket: listen for host navigation
-  const onHostNavigate = useCallback((data) => {
-    if (data?.path) navigate(data.path);
-  }, [navigate]);
+  const onHostNavigate = useCallback(
+    (data) => {
+      if (data?.path) navigate(data.path);
+    },
+    [navigate]
+  );
 
   useSessionSocket(roomId, null, onHostNavigate, onItemsUpdate);
 
   const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) {
-      return;
-    }
+    const file = e.target.files?.[0];
+    if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      setError("Please upload an image file (JPG, PNG, etc.)");
+      setError("Please upload a receipt image (JPG, PNG, WebP)");
       return;
     }
 
     setError("");
     setIsProcessing(true);
-    setProgress(0);
-
-    const progressInterval = setInterval(() => {  
-      setProgress((prev) => {
-        if (prev >= 90) {
-          return 90;
-        }
-        return prev + 10;
-      });
-    }, 200);
+    setProcessingStage("Optimizing & uploading receipt...");
 
     try {
       const uploadFile = await compressImageForUpload(file);
       const image = await toBase64(uploadFile);
+
+      setProcessingStage("Reading items with Gemini AI...");
       const response = await api.post("/bills/parse", { image }, { timeout: 60000 });
       const parsed = response.data || {};
 
+      setProcessingStage("Preparing parsed bill items...");
 
       const parsedItems = Array.isArray(parsed.items)
         ? parsed.items.map((item) => {
-            const quantity = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
-            const unitPrice = Number(item.unit_price) || 0;
-            const totalPrice = Number(item.total_price) || unitPrice * quantity;
+          const quantity = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
+          const unitPrice = Number(item.unit_price) || 0;
+          const totalPrice = Number(item.total_price) || unitPrice * quantity;
 
-            return {
-              name: `${quantity}x ${item.name || "Item"}`,
-              price: totalPrice,
-              quantity,
-              unitPrice,
-            };
-          })
+          return {
+            name: `${quantity}x ${item.name || "Item"}`,
+            price: totalPrice,
+            quantity,
+            unitPrice,
+          };
+        })
         : [];
 
       const parsedTotal =
@@ -248,74 +267,74 @@ export default function ScanBill() {
         parsedItems.reduce((sum, item) => sum + item.price, 0);
 
       const newScannedData = {
-        restaurant: "Parsed Receipt",
-        address: "",
+        restaurant: parsed.restaurant || "Parsed Receipt",
+        address: parsed.address || "",
         items: parsedItems,
         total: parsedTotal,
       };
-      setScannedData(newScannedData);
-      setProgress(100);
 
-      // Broadcast to participants via socket
+      setScannedData(newScannedData);
+
       if (roomId) {
         emitItemsUpdate(roomId, newScannedData, manualItems);
       }
     } catch (err) {
       setScannedData(null);
-
       const isTimeout = err.code === "ECONNABORTED" || err.message?.includes("timeout");
       setError(
         isTimeout
-          ? "Parsing is taking longer than expected. Please retry with a clearer/smaller image."
+          ? "Receipt reading timed out. Try a clearer or smaller photo, or add items manually."
           : err.response?.data?.error ||
-              err.response?.data?.message ||
-              err.message ||
-              "Failed to parse bill image",
+          err.response?.data?.message ||
+          "Could not parse receipt. You can enter items manually below."
       );
     } finally {
-      clearInterval(progressInterval);
       setIsProcessing(false);
+      setProcessingStage("");
       e.target.value = "";
     }
   };
 
-  const handleCameraCapture = () => {
-    const fileInput = document.getElementById("fileUpload");
-    if (fileInput) {
-      fileInput.click();
-    }
-  };
-
   const handleAddManualItem = () => {
-    if (itemName.trim() && itemPrice && itemQuantity) {
-      const newItem = {
-        name: `${itemQuantity}x ${itemName.trim()}`,
-        price: parseFloat(itemPrice) * parseInt(itemQuantity),
-        quantity: parseInt(itemQuantity),
-        unitPrice: parseFloat(itemPrice),
-        assigned: itemAssigned.slice(),
-      };
-      const updatedItems = [...manualItems, newItem];
-      setManualItems(updatedItems);
-      setItemAssigned([]);
-      setItemName("");
-      setItemPrice("");
-      setItemQuantity("1");
+    const trimmed = itemName.trim();
+    const priceNum = parseFloat(itemPrice);
+    const qtyNum = parseInt(itemQuantity, 10) || 1;
 
-      // Broadcast to participants via socket
-      if (roomId) {
-        emitItemsUpdate(roomId, scannedData, updatedItems);
-      }
+    if (!trimmed) {
+      setError("Enter an item name");
+      return;
+    }
+    if (!itemPrice || isNaN(priceNum) || priceNum <= 0) {
+      setError("Enter a price greater than रु 0");
+      return;
+    }
+
+    setError("");
+    const newItem = {
+      name: `${qtyNum > 1 ? `${qtyNum}x ` : ""}${trimmed}`,
+      price: priceNum * qtyNum,
+      quantity: qtyNum,
+      unitPrice: priceNum,
+      assigned: itemAssigned.slice(),
+    };
+
+    const updated = [...manualItems, newItem];
+    setManualItems(updated);
+    setItemName("");
+    setItemPrice("");
+    setItemQuantity("1");
+    setItemAssigned([]);
+
+    if (roomId) {
+      emitItemsUpdate(roomId, scannedData, updated);
     }
   };
 
   const handleRemoveManualItem = (index) => {
-    const updatedItems = manualItems.filter((_, i) => i !== index);
-    setManualItems(updatedItems);
-
-    // Broadcast to participants via socket
+    const updated = manualItems.filter((_, i) => i !== index);
+    setManualItems(updated);
     if (roomId) {
-      emitItemsUpdate(roomId, scannedData, updatedItems);
+      emitItemsUpdate(roomId, scannedData, updated);
     }
   };
 
@@ -326,14 +345,14 @@ export default function ScanBill() {
   };
 
   const hasItems = scannedData || manualItems.length > 0;
+  const billTotal = calculateTotal();
 
   const handleContinue = async () => {
-    // Build all items from scanned + manual
     const allItems = [
       ...(scannedData?.items || []).map((item) => ({
         name: item.name,
         price: item.price,
-        quantity: 1,
+        quantity: item.quantity || 1,
       })),
       ...manualItems.map((item) => ({
         name: item.name,
@@ -343,55 +362,50 @@ export default function ScanBill() {
       })),
     ];
 
-    const totalAmount = calculateTotal();
-
     setSaving(true);
     setError("");
+
     try {
-      // Create receipt in backend
       const receiptRes = await api.post("/receipts", {
         restaurant: scannedData?.restaurant || "",
         address: scannedData?.address || "",
         items: allItems,
-        totalAmount,
+        totalAmount: billTotal,
       });
 
-      // Store receipt for next pages
       localStorage.setItem("currentReceipt", JSON.stringify(receiptRes.data.receipt));
-
       const receiptId = receiptRes.data.receipt._id;
 
-        if (splitId) {
-        // Update existing split with receipt + session so backend auto-calculates breakdown
+      if (splitId) {
         const updateRes = await api.put(`/splits/${splitId}`, {
           receiptId,
-          totalAmount,
+          totalAmount: billTotal,
           splitType: "equal",
           ...(sessionId ? { sessionId } : {}),
         });
 
         localStorage.setItem("currentSplit", JSON.stringify(updateRes.data.split));
+        const targetPath = `/split/breakdown?splitId=${splitId}&sessionId=${sessionId}&type=${type}${groupId ? `&groupId=${groupId}` : ""
+          }`;
 
-        // Navigate to breakdown page with all query params
-        const targetPath = `/split/breakdown?splitId=${splitId}&sessionId=${sessionId}&type=${type}${groupId ? `&groupId=${groupId}` : ''}`;
-
-        // Emit socket event so participants are redirected too
         if (roomId) {
           emitHostNavigate(roomId, targetPath);
         }
 
         navigate(targetPath);
       } else {
-        // No existing split — create a new one (direct split without session)
         const splitRes = await api.post("/splits", {
           receiptId,
           splitType: "equal",
-          totalAmount,
+          totalAmount: billTotal,
           breakdown: [],
         });
 
         localStorage.setItem("currentSplit", JSON.stringify(splitRes.data.split));
-        navigate(`/split/breakdown?splitId=${splitRes.data.split._id}${sessionId ? `&sessionId=${sessionId}` : ""}&type=${type || "direct"}${groupId ? `&groupId=${groupId}` : ""}`);
+        navigate(
+          `/split/breakdown?splitId=${splitRes.data.split._id}${sessionId ? `&sessionId=${sessionId}` : ""
+          }&type=${type || "direct"}${groupId ? `&groupId=${groupId}` : ""}`
+        );
       }
     } catch (err) {
       setError(err.response?.data?.message || "Failed to save receipt and calculate split");
@@ -401,25 +415,32 @@ export default function ScanBill() {
   };
 
   return (
-    <div className="flex min-h-screen bg-zinc-50">
-      <TopBar onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)} isOpen={isMobileMenuOpen} />
+    <div className="flex min-h-screen bg-zinc-50 pb-28 md:pb-8">
+      <TopBar
+        onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        isOpen={isMobileMenuOpen}
+      />
       <SideBar isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
 
-      <main className="ml-0 min-w-0 flex-1 overflow-x-hidden px-4 py-8 pt-24 sm:mt-10 sm:px-8 md:ml-56 md:pt-8">
-        <div className="mx-auto max-w-4xl">
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold text-slate-900">Scan Your Bill</h1>
-            <p className="mt-2 text-base text-slate-500">
+      <main className="ml-0 min-w-0 flex-1 px-4 py-6 pt-20 md:ml-56 md:px-8 md:pt-6">
+        <div className="mx-auto max-w-4xl space-y-6">
+          {/* Header */}
+          <div>
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-800">
+              Bill Setup
+            </span>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+              Scan or Enter Your Bill
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
               {isHost
-                ? "Upload a photo of your receipt to auto-fill items and prices."
-                : "The host is adding items. You can watch the bill update in real-time."}
+                ? "Upload receipt for automatic AI parsing, or type items manually."
+                : "The host is entering the bill. You can view items as they appear."}
             </p>
             {!isHost && !hostLoading && (
-              <div className="mt-3 flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
-                <FaLock className="text-amber-500" />
-                <span className="text-sm font-medium text-amber-700">
-                  Only the host can add or scan items. You're viewing as a participant.
-                </span>
+              <div className="mt-3 flex items-center gap-2 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 text-xs font-semibold text-amber-800">
+                <FaLock className="text-amber-500 text-sm shrink-0" />
+                <span>Host is adding items. Your screen synchronizes live.</span>
               </div>
             )}
           </div>
@@ -427,387 +448,276 @@ export default function ScanBill() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Upload Section - Host Only */}
             {isHost ? (
-            <div className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-8">
-              <label
-                htmlFor="fileUpload"
-                className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-zinc-300 bg-zinc-50 px-6 py-16 transition hover:border-emerald-400 hover:bg-emerald-50/30"
-              >
-                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-500">
-                  <FaCloudUploadAlt className="text-3xl" />
-                </div>
-                <p className="text-lg font-bold text-slate-900">
-                  Upload or Drag & Drop
-                </p>
-                <p className="mt-2 text-sm text-slate-500">
-                  Supports JPG and PNG receipts
-                </p>
-                <input
-                  id="fileUpload"
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleFileUpload}
-                />
-              </label>
-
-              <div className="mt-6 flex items-center gap-4">
-                <div className="h-px flex-1 bg-zinc-200"></div>
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-600">
-                  or
-                </span>
-                <div className="h-px flex-1 bg-zinc-200"></div>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleCameraCapture}
-                className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-white px-6 py-3 text-base font-semibold text-slate-700 transition hover:bg-zinc-50"
-              >
-                <FaCamera className="text-lg" />
-                Camera Capture
-              </button>
-
-              {/* Processing Indicator */}
-              {isProcessing && (
-                <div className="mt-8">
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
-                      <FaCheckCircle className="animate-pulse text-emerald-500" />
-                      <span className="font-semibold text-slate-700">
-                        Processing Receipt...
-                      </span>
-                    </div>
-                    <span className="font-bold text-emerald-600">
-                      {progress}% Complete
-                    </span>
-                  </div>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-zinc-200">
-                    <div
-                      className="h-full rounded-full bg-linear-to-r from-emerald-400 to-teal-500 transition-all duration-300"
-                      style={{ width: `${progress}%` }}
-                    ></div>
-                  </div>
-                </div>
-              )}
-
-              {error && !hasItems && (
-                <p className="mt-4 text-sm font-medium text-red-500 text-center">{error}</p>
-              )}
-            </div>
-            ) : (
-            /* Participant: Waiting view instead of upload */
-            <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm flex flex-col items-center justify-center min-h-75">
-              {hostLoading ? (
-                <FaSpinner className="animate-spin text-3xl text-emerald-400 mb-4" />
-              ) : (
-                <>
-                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-amber-500">
-                    <FaLock className="text-2xl" />
-                  </div>
-                  <p className="text-lg font-bold text-slate-900 text-center">Host is Managing the Bill</p>
-                  <p className="mt-2 text-sm text-slate-500 text-center">
-                    Items will appear here in real-time as the host adds them.
+              <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-2xs space-y-4 sm:p-6">
+                <label
+                  htmlFor="fileUpload"
+                  className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-zinc-300 bg-zinc-50/70 p-8 text-center transition hover:border-emerald-500 hover:bg-emerald-50/40"
+                >
+                  <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600 shadow-2xs">
+                    <FaCloudUploadAlt className="text-2xl" />
+                  </span>
+                  <p className="mt-3 text-sm font-bold text-slate-900">
+                    Upload Receipt Photo
                   </p>
-                  <div className="mt-6 flex items-center gap-2">
-                    <span className="relative flex h-3 w-3">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500"></span>
-                    </span>
-                    <span className="text-sm font-medium text-emerald-600">Watching live...</span>
+                  <p className="mt-1 text-xs text-slate-500">
+                    JPG, PNG, or camera snapshot
+                  </p>
+                  <input
+                    id="fileUpload"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                </label>
+
+                {/* Processing Feedback */}
+                {isProcessing && (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
+                    <div className="flex items-center gap-3">
+                      <FaSpinner className="animate-spin text-emerald-600 text-base" />
+                      <div>
+                        <p className="text-xs font-bold text-slate-900">{processingStage}</p>
+                        <p className="text-[11px] text-slate-500">AI is extracting prices and dishes...</p>
+                      </div>
+                    </div>
                   </div>
-                </>
-              )}
-            </div>
+                )}
+
+                {error && !hasItems && (
+                  <p className="text-xs font-medium text-red-600" role="alert">
+                    {error}
+                  </p>
+                )}
+              </div>
+            ) : (
+              /* Participant view */
+              <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-2xs flex flex-col items-center justify-center text-center min-h-55">
+                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                  <FaSpinner className="animate-spin text-xl" />
+                </span>
+                <p className="mt-3 text-sm font-bold text-slate-900">Host is managing the bill</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Items will appear on the right side in real time.
+                </p>
+              </div>
             )}
 
-            {/* Preview Section — visible to both host and participants */}
-            <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
-              {!scannedData && manualItems.length === 0 ? (
-                <div className="flex h-full min-h-100 flex-col items-center justify-center text-center">
-                  {!isHost && !hostLoading ? (
-                    <>
-                      <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-emerald-50">
-                        <FaSpinner className="animate-spin text-2xl text-emerald-400" />
-                      </div>
-                      <p className="text-sm font-semibold text-slate-500">
-                        Waiting for host to scan or add items...
-                      </p>
-                      <div className="mt-3 flex items-center gap-2">
-                        <span className="relative flex h-2 w-2">
-                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
-                        </span>
-                        <span className="text-xs text-emerald-600">Live preview</span>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="mb-4 h-20 w-20 rounded-full bg-zinc-100"></div>
-                      <p className="text-sm font-semibold text-slate-400">
-                        Receipt preview will appear here
-                      </p>
-                    </>
-                  )}
+            {/* Receipt Preview */}
+            <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-2xs sm:p-6">
+              <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+                <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700">
+                  Bill Preview
+                </h2>
+                {hasItems && (
+                  <span className="text-xs font-bold text-emerald-800">
+                    {formatNPR(billTotal)}
+                  </span>
+                )}
+              </div>
+
+              {!hasItems ? (
+                <div className="py-12 text-center text-slate-400">
+                  <p className="text-xs font-medium">No items yet</p>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Upload a receipt or add items manually below
+                  </p>
                 </div>
               ) : (
-                <div>
-                  {!isHost && (
-                    <div className="mb-4 flex items-center gap-2">
-                      <span className="relative flex h-2 w-2">
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
-                      </span>
-                      <span className="text-xs font-bold uppercase tracking-wider text-emerald-600">Live from host</span>
-                    </div>
-                  )}
+                <div className="mt-4 space-y-4">
                   {scannedData && (
-                    <>
-                      <div className="mb-6 border-b border-zinc-200 pb-4 text-center">
-                        <h3 className="text-lg font-bold text-slate-900">
-                          {scannedData.restaurant}
-                        </h3>
-                        <p className="text-xs text-slate-500">{scannedData.address}</p>
-                      </div>
-
-                      <div className="space-y-3">
-                        {scannedData.items.map((item, index) => (
+                    <div className="space-y-2">
+                      <p className="text-xs font-bold text-slate-800">
+                        {scannedData.restaurant}
+                      </p>
+                      <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                        {scannedData.items.map((item, idx) => (
                           <div
-                            key={index}
-                            className="flex min-w-0 items-start justify-between gap-3 text-sm"
+                            key={idx}
+                            className="flex items-center justify-between text-xs py-1 border-b border-zinc-50"
                           >
-                            <span className="min-w-0 break-words text-slate-700">{item.name}</span>
-                            <span className="shrink-0 font-semibold text-slate-900">
-                              NPR{item.price.toFixed(2)}
+                            <span className="text-slate-700">{item.name}</span>
+                            <span className="font-bold text-slate-900">
+                              {formatNPR(item.price)}
                             </span>
                           </div>
                         ))}
                       </div>
-                    </>
+                    </div>
                   )}
 
                   {manualItems.length > 0 && (
-                    <>
-                      {scannedData && (
-                        <div className="my-4 border-t border-zinc-200 pt-4">
-                          <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">
-                            Manual Items
-                          </p>
+                    <div className="space-y-1.5 border-t border-zinc-100 pt-3">
+                      <p className="text-xs font-bold text-slate-800">Manual Items</p>
+                      {manualItems.map((item, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between text-xs py-1"
+                        >
+                          <span className="text-slate-700">{item.name}</span>
+                          <span className="font-bold text-slate-900">
+                            {formatNPR(item.price)}
+                          </span>
                         </div>
-                      )}
-                      <div className="space-y-3">
-                        {manualItems.map((item, index) => (
-                          <div
-                            key={index}
-                            className="flex min-w-0 items-start justify-between gap-3 text-sm"
-                          >
-                            <span className="min-w-0 break-words text-slate-700">{item.name}</span>
-                            <span className="shrink-0 font-semibold text-slate-900">
-                              NPR{item.price.toFixed(2)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </>
+                      ))}
+                    </div>
                   )}
 
-                  <div className="mt-6 border-t border-emerald-200 bg-emerald-50 px-4 py-3 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <span className="text-base font-bold text-slate-900">
-                        TOTAL
-                      </span>
-                      <span className="text-lg font-bold text-slate-900">
-                        NPR{calculateTotal().toFixed(2)}
-                      </span>
-                    </div>
+                  {/* Summary row */}
+                  <div className="rounded-2xl bg-zinc-50 p-3.5 flex items-center justify-between border border-zinc-200">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                      Total Bill
+                    </span>
+                    <span className="text-base font-black text-slate-900">
+                      {formatNPR(billTotal)}
+                    </span>
                   </div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Manual Entry Section - Host Only */}
-          {isHost ? (
-          <div className="mt-6 rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-8">
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-900">Add Items Manually</h2>
-              <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">
-                OPTIONAL
-              </span>
-            </div>
+          {/* Manual Item Entry - Host Only */}
+          {isHost && (
+            <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-2xs sm:p-6">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700 mb-3">
+                Add Items Manually
+              </h2>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
-              <div className="md:col-span-5">
-                <label htmlFor="manualItemName" className="mb-2 block text-sm font-semibold text-slate-700">
-                  Item Name
-                </label>
-                <input
-                  id="manualItemName"
-                  type="text"
-                  value={itemName}
-                  onChange={(e) => setItemName(e.target.value)}
-                  placeholder="e.g., Pizza"
-                  className="w-full rounded-xl border border-zinc-300 bg-zinc-50 px-4 py-3 text-base text-slate-900 placeholder-slate-400 transition focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-12 sm:items-end">
+                <div className="sm:col-span-4">
+                  <label htmlFor="manualItemName" className="mb-1 block text-xs font-bold text-slate-600">
+                    Item Name
+                  </label>
+                  <input
+                    id="manualItemName"
+                    type="text"
+                    value={itemName}
+                    onChange={(e) => setItemName(e.target.value)}
+                    placeholder="e.g. Chicken Momo, Cold Drink"
+                    className="w-full rounded-2xl border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  />
+                </div>
+
+                <div className="sm:col-span-3">
+                  <label htmlFor="manualItemAssign" className="mb-1 block text-xs font-bold text-slate-600">
+                    Assign To
+                  </label>
+                  <select
+                    id="manualItemAssign"
+                    aria-label="Assign To"
+                    value={itemAssigned[0] || ""}
+                    onChange={(e) => setItemAssigned(e.target.value ? [e.target.value] : [])}
+                    className="w-full rounded-2xl border border-zinc-300 bg-white px-3 py-2.5 text-xs text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  >
+                    <option value="">All / Split</option>
+                    {_participantsList.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label htmlFor="manualItemQuantity" className="mb-1 block text-xs font-bold text-slate-600">
+                    Quantity
+                  </label>
+                  <input
+                    id="manualItemQuantity"
+                    type="number"
+                    min="1"
+                    value={itemQuantity}
+                    onChange={(e) => setItemQuantity(e.target.value)}
+                    className="w-full rounded-2xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  />
+                </div>
+
+                <div className="sm:col-span-3">
+                  <MoneyInput
+                    label="Price (NPR)"
+                    value={itemPrice}
+                    onChange={setItemPrice}
+                    placeholder="0.00"
+                  />
+                </div>
               </div>
 
-              <div className="md:col-span-3">
-                <label htmlFor="manualItemAssignees" className="mb-2 block text-sm font-semibold text-slate-700">
-                  Assign To
-                </label>
-                <select
-                  id="manualItemAssignees"
-                  multiple
-                  value={itemAssigned}
-                  onChange={(e) => {
-                    const opts = Array.from(e.target.selectedOptions).map((o) => o.value);
-                    setItemAssigned(opts);
-                  }}
-                  className="w-full rounded-xl border border-zinc-300 bg-zinc-50 px-3 py-2 text-base text-slate-900 placeholder-slate-400 transition focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                >
-                  {participantsList.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-                <p className="mt-1 text-xs text-slate-600">Hold Ctrl/Cmd to select multiple</p>
-              </div>
-
-              <div className="md:col-span-3">
-                <label htmlFor="manualItemQuantity" className="mb-2 block text-sm font-semibold text-slate-700">
-                  Quantity
-                </label>
-                <input
-                  id="manualItemQuantity"
-                  type="number"
-                  value={itemQuantity}
-                  onChange={(e) => setItemQuantity(e.target.value)}
-                  min="1"
-                  placeholder="1"
-                  className="w-full rounded-xl border border-zinc-300 bg-zinc-50 px-4 py-3 text-base text-slate-900 placeholder-slate-400 transition focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                />
-              </div>
-
-              <div className="md:col-span-3">
-                <label htmlFor="manualItemPrice" className="mb-2 block text-sm font-semibold text-slate-700">
-                  Price (NPR)
-                </label>
-                <input
-                  id="manualItemPrice"
-                  type="number"
-                  value={itemPrice}
-                  onChange={(e) => setItemPrice(e.target.value)}
-                  step="0.01"
-                  min="0"
-                  placeholder="0.00"
-                  className="w-full rounded-xl border border-zinc-300 bg-zinc-50 px-4 py-3 text-base text-slate-900 placeholder-slate-400 transition focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                />
-              </div>
-
-              <div className="md:col-span-1 md:self-end">
+              <div className="mt-3 flex justify-end">
                 <button
                   type="button"
-                  onClick={handleAddManualItem}
-                  className="flex h-12 w-full items-center justify-center rounded-xl bg-emerald-400 text-slate-950 transition hover:bg-emerald-300"
-                  title="Add Item"
                   aria-label="Add item"
+                  onClick={handleAddManualItem}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-500 px-5 py-2.5 text-xs font-bold text-slate-950 transition hover:bg-emerald-400 active:scale-95 cursor-pointer"
                 >
-                  <FaPlusCircle className="text-xl" />
+                  <FaPlusCircle />
+                  <span>Add item</span>
                 </button>
               </div>
-            </div>
 
-            {manualItems.length > 0 && (
-              <div className="mt-6 space-y-2">
-                <p className="text-sm font-semibold text-slate-700">Added Items:</p>
-                {manualItems.map((item, index) => (
-                  <div
-                    key={index}
-                    className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <span className="text-sm font-medium text-slate-900">{item.name}</span>
-                      <span className="ml-2 text-xs text-slate-500">
-                        (NPR{item.unitPrice.toFixed(2)} each)
-                      </span>
-                      {item.assigned && item.assigned.length > 0 && (
-                        <div className="mt-2 text-xs text-slate-600">
-                          Assigned to: {item.assigned.map(a => {
-                            const found = participantsList.find(p => p.id === String(a));
-                            return found ? found.name : a;
-                          }).join(', ')}
-                        </div>
-                      )}
+              {/* Added manual items list */}
+              {manualItems.length > 0 && (
+                <div className="mt-4 space-y-2 border-t border-zinc-100 pt-3">
+                  {manualItems.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between rounded-xl bg-zinc-50 px-3 py-2 text-xs border border-zinc-200"
+                    >
+                      <span className="font-semibold text-slate-800">{item.name}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="font-bold text-slate-900">
+                          {formatNPR(item.price)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveManualItem(idx)}
+                          className="text-zinc-400 hover:text-red-500 p-1 transition cursor-pointer"
+                          aria-label="Remove item"
+                        >
+                          <FaTrash className="text-xs" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-bold text-slate-900">
-                        NPR{item.price.toFixed(2)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveManualItem(index)}
-                        className="text-red-500 transition hover:text-red-600"
-                        title="Remove Item"
-                      >
-                        <FaTrash className="text-sm" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          ) : (
-          /* Participant: Read-only list of manual items */
-          manualItems.length > 0 && (
-            <div className="mt-6 rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
-              <div className="mb-6 flex items-center justify-between">
-                <h2 className="text-xl font-bold text-slate-900">Manual Items</h2>
-                <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-500">
-                  ADDED BY HOST
-                </span>
-              </div>
-              <div className="space-y-2">
-                {manualItems.map((item, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3"
-                  >
-                    <span className="text-sm font-medium text-slate-900">{item.name}</span>
-                    <span className="text-sm font-bold text-slate-900">
-                      NPR{item.price.toFixed(2)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )
-          )}
-
-          {/* Continue Button - Host only can calculate; participants see waiting state */}
-          {hasItems && (
-            <div className="mt-6">
-              {error && (
-                <p className="mb-3 text-sm text-red-500 font-medium text-center">{error}</p>
-              )}
-              {isHost ? (
-                <button
-                  type="button"
-                  onClick={handleContinue}
-                  disabled={saving}
-                  className="w-full rounded-full bg-emerald-400 px-8 py-4 text-lg font-bold text-slate-900 shadow-lg shadow-emerald-300/40 transition hover:bg-emerald-500 disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {saving ? <FaSpinner className="animate-spin" /> : null}
-                  Calculate Split
-                </button>
-              ) : (
-                <div className="flex items-center justify-center gap-2 rounded-full bg-zinc-100 px-8 py-4 text-lg font-semibold text-slate-500">
-                  <FaSpinner className="animate-spin" />
-                  Waiting for host to calculate split...
+                  ))}
                 </div>
               )}
             </div>
           )}
         </div>
       </main>
+
+      {/* Sticky Mobile & Desktop Action Bar */}
+      {hasItems && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-zinc-200 bg-white/95 p-3.5 backdrop-blur-md shadow-lg md:left-56">
+          <div className="mx-auto flex max-w-4xl items-center justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Total Bill
+              </p>
+              <p className="text-lg font-black text-slate-900">
+                {formatNPR(billTotal)}
+                <span className="sr-only">NPR{billTotal.toFixed(2)}</span>
+              </p>
+            </div>
+
+            {isHost ? (
+              <LoadingButton
+                size="lg"
+                loading={saving}
+                loadingText="Saving Bill..."
+                onClick={handleContinue}
+                icon={<FaArrowRight />}
+              >
+                Calculate Split
+              </LoadingButton>
+            ) : (
+              <span className="text-xs font-semibold text-slate-500">
+                Waiting for host to proceed...
+              </span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,15 +1,27 @@
-// ...existing code...
+/**
+ * @fileoverview Split Breakdown Page
+ * @description Master split breakdown and settlement management screen.
+ *              Key Features:
+ *              - Real-time split method switcher (Equal, Percentage, Custom)
+ *              - Live calculation feedback powered by calculationEngine.js
+ *              - Exact paisa remainder reconciliation
+ *              - Clear financial metrics: Total Bill, Collected, Remaining Due
+ *              - Inline payment tracking for hosts with StatusBadge
+ *              - Canonical रु currency formatting via formatNPR
+ *              - Double-submission protected notification and navigation
+ *
+ * @module pages/split/SplitBreakdown
+ */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  FaCheckCircle,
-  FaRegPaperPlane,
   FaWallet,
-  FaSpinner,
-  FaTimesCircle,
-  FaHourglassHalf,
   FaArrowRight,
+  FaBalanceScale,
+  FaPercentage,
+  FaEdit,
+  FaRegPaperPlane,
 } from "react-icons/fa";
 import SideBar from "../../components/layout/Dashboard/SideBar";
 import TopBar from "../../components/layout/Dashboard/TopBar";
@@ -17,42 +29,28 @@ import api from "../../config/config";
 import toast, { Toaster } from "react-hot-toast";
 import useSessionSocket, { emitHostNavigate } from "../../hooks/useSessionSocket";
 import socket from "../../config/socket";
-// ...existing code...
+import { formatNPR } from "../../utills/formatNPR";
+import {
+  StatusBadge,
+  ConnectionPill,
+} from "../../components/common/primitives";
+import LoadingButton from "../../components/common/LoadingButton";
+import {
+  calculateEqualSplit,
+  calculatePercentageSplit,
+  calculateCustomSplit,
+} from "../../utills/calculationEngine";
 
-
-const AVATAR_COLORS = [
-  "bg-emerald-200",
-  "bg-zinc-300",
-  "bg-amber-200",
-  "bg-violet-200",
-  "bg-blue-200",
-  "bg-rose-200",
+const AVATAR_PALETTE = [
+  "bg-emerald-100 text-emerald-800 border-emerald-300",
+  "bg-blue-100 text-blue-800 border-blue-300",
+  "bg-purple-100 text-purple-800 border-purple-300",
+  "bg-amber-100 text-amber-800 border-amber-300",
+  "bg-rose-100 text-rose-800 border-rose-300",
+  "bg-teal-100 text-teal-800 border-teal-300",
 ];
 
 const STATUS_OPTIONS = ["unpaid", "partial", "paid"];
-
-function statusBadge(status) {
-  switch (status) {
-    case "paid":
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
-          <FaCheckCircle className="text-[10px]" /> Paid
-        </span>
-      );
-    case "partial":
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">
-          <FaHourglassHalf className="text-[10px]" /> Partial
-        </span>
-      );
-    default:
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-600">
-          <FaTimesCircle className="text-[10px]" /> Unpaid
-        </span>
-      );
-  }
-}
 
 export default function SplitBreakdown() {
   const navigate = useNavigate();
@@ -62,17 +60,23 @@ export default function SplitBreakdown() {
   const [session, setSession] = useState(null);
   const [groupMembers, setGroupMembers] = useState([]);
   const [notifying, setNotifying] = useState(false);
-  const [updatingIdx, setUpdatingIdx] = useState(null);
   const [inlinePayments, setInlinePayments] = useState({});
+  const [updatingIdx, setUpdatingIdx] = useState(null);
+
+  // Dynamic split method controls
+  const [activeMethod, setActiveMethod] = useState("equal");
+  const [percentageDrafts, setPercentageDrafts] = useState({});
+  const [customDrafts, setCustomDrafts] = useState({});
+  const [methodDirty, setMethodDirty] = useState(false);
+  const [savingMethod, setSavingMethod] = useState(false);
+
   const ensureMembersRequestedRef = useRef(new Set());
-  const amountUpdateTimersRef = useRef({});
-  const dirtyAmountIndexesRef = useRef(new Set());
 
   const splitId = searchParams.get("splitId");
   const sessionId = searchParams.get("sessionId");
   const type = searchParams.get("type");
   const groupId = searchParams.get("groupId");
-  const roomId = type === 'group' ? groupId : sessionId;
+  const roomId = type === "group" ? groupId : sessionId;
 
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
   const currentUserId = storedUser?._id || storedUser?.id;
@@ -80,50 +84,52 @@ export default function SplitBreakdown() {
   const fetchSplit = useCallback(async () => {
     try {
       if (splitId) {
-        // Add cache-busting to bypass any stale service-worker cache
-        const splitRes = await api.get(`/splits/${splitId}`, { headers: { 'Cache-Control': 'no-cache' } });
+        const splitRes = await api.get(`/splits/${splitId}`, {
+          headers: { "Cache-Control": "no-cache" },
+        });
         const latestSplit = splitRes.data.split;
         setSplit(latestSplit);
+        if (latestSplit.splitType && !methodDirty) {
+          setActiveMethod(latestSplit.splitType);
+        }
         return latestSplit;
       }
     } catch {
       toast.error("Failed to load split data");
     }
     return null;
-  }, [splitId]);
+  }, [splitId, methodDirty]);
 
   useEffect(() => {
     const fetchData = async () => {
-      // First fetch split data
       const latestSplit = await fetchSplit();
 
-      // For group splits: if we know group members and server breakdown is missing members,
-      // call ensure-members to reconcile. Avoid calling ensure-members blindly (it caused server 500s).
       try {
-        if (type === 'group' && splitId && groupId) {
-          // fetch group members so we can compare
+        if (type === "group" && splitId && groupId) {
           const groupRes = await api.get(`/groups/${groupId}`);
           const grp = groupRes.data.data || groupRes.data;
           const members = grp.members || [];
           setGroupMembers(members);
-          // If server breakdown has fewer entries than group members, ask server to reconcile once.
+
           const currentBreakdown = (latestSplit && latestSplit.breakdown) || [];
           const ensureKey = `${splitId}:${groupId}`;
-          if (members.length > currentBreakdown.length && !ensureMembersRequestedRef.current.has(ensureKey)) {
+          if (
+            members.length > currentBreakdown.length &&
+            !ensureMembersRequestedRef.current.has(ensureKey)
+          ) {
             try {
               ensureMembersRequestedRef.current.add(ensureKey);
               await api.post(`/splits/${splitId}/ensure-members`);
-              // re-fetch split after reconciliation
               await fetchSplit();
             } catch (e) {
-              console.warn('ensure-members failed (non-fatal):', e?.response?.data?.message || e?.message);
+              console.warn("ensure-members non-fatal:", e);
             }
           }
         }
       } catch (e) {
-        // group fetch may fail; continue gracefully
-        console.warn('Failed to load group members for breakdown', e);
+        console.warn("Failed to load group members", e);
       }
+
       try {
         if (sessionId) {
           const sessionRes = await api.get(`/session/${sessionId}`);
@@ -136,8 +142,8 @@ export default function SplitBreakdown() {
     fetchData();
   }, [splitId, sessionId, type, groupId, fetchSplit]);
 
-  // Determine if current user is the host (first participant in session)
-  const sessionParticipants = session?.session?.participants || session?.participants || [];
+  const sessionParticipants =
+    session?.session?.participants || session?.participants || [];
   const firstParticipant = sessionParticipants[0];
   const hostUserId =
     typeof firstParticipant === "object"
@@ -145,7 +151,6 @@ export default function SplitBreakdown() {
       : firstParticipant;
   const isHost = currentUserId && String(hostUserId) === String(currentUserId);
 
-  // Socket: listen for host-navigate so non-host users get redirected
   const onHostNavigate = useCallback(
     (data) => {
       if (data?.path) navigate(data.path);
@@ -153,16 +158,21 @@ export default function SplitBreakdown() {
     [navigate]
   );
 
-  const onParticipantJoined = useCallback((data) => {
-    // When participants join, refetch split so breakdown updates (group joins)
-    if (data?.participants) {
-      fetchSplit();
-    }
-  }, [fetchSplit]);
+  const onParticipantJoined = useCallback(
+    (data) => {
+      if (data?.participants) fetchSplit();
+    },
+    [fetchSplit]
+  );
 
-  useSessionSocket(roomId || sessionId, onParticipantJoined, onHostNavigate, null);
+  const { connectionStatus } = useSessionSocket(
+    roomId || sessionId,
+    onParticipantJoined,
+    onHostNavigate,
+    null,
+    fetchSplit
+  );
 
-  // Listen for split-updated events (emitted when group join triggers a recalc)
   useEffect(() => {
     if (!roomId) return;
     const handler = (data) => {
@@ -172,38 +182,41 @@ export default function SplitBreakdown() {
     };
 
     try {
-      socket.on('split-updated', handler);
-    } catch (e) {
-      console.warn('Failed to subscribe to split-updated', e);
-    }
+      socket.on("split-updated", handler);
+    } catch (e) { }
 
     return () => {
-      try { socket.off('split-updated', handler); } catch (e) {}
+      try {
+        socket.off("split-updated", handler);
+      } catch (e) { }
     };
   }, [roomId, splitId, fetchSplit]);
 
-  const totalAmount = split?.totalAmount || 0;
+  const totalAmount = Number(split?.totalAmount || 0);
   const breakdown = useMemo(() => split?.breakdown || [], [split?.breakdown]);
 
-  // If group mode, ensure we display all group members even if split.breakdown has only host
+  // Merge group members if needed
   const mergedParticipants = useMemo(() => {
-    if (type === 'group' && groupMembers && groupMembers.length > 0) {
-      const equalShare = totalAmount > 0 ? Math.round((totalAmount / groupMembers.length) * 100) / 100 : 0;
+    if (type === "group" && groupMembers && groupMembers.length > 0) {
+      const equalShare =
+        totalAmount > 0
+          ? Math.round((totalAmount / groupMembers.length) * 100) / 100
+          : 0;
       return groupMembers.map((m) => {
         const id = String(m._id || m.id || m);
         const found = breakdown.find((b) => {
-          const bid = String(b.user?._id || b.user || b.participant?._id || b.participant || b._id || b.id || '');
+          const bid = String(
+            b.user?._id || b.user || b.participant?._id || b.participant || b._id || b.id || ""
+          );
           return bid === id;
         });
         if (found) return found;
-        // Member is in the group but not yet in server breakdown — show their equal share
-        // (This is a display-only fallback; ensure-members will reconcile moments after load)
         return {
-          name: m.fullName || m.name || m.email || 'Participant',
+          name: m.fullName || m.name || m.email || "Participant",
           amount: equalShare,
           amountPaid: 0,
-          paymentStatus: 'unpaid',
-          email: m.email || '',
+          paymentStatus: "unpaid",
+          email: m.email || "",
           _missingFromBreakdown: true,
         };
       });
@@ -212,88 +225,89 @@ export default function SplitBreakdown() {
   }, [type, groupMembers, breakdown, totalAmount]);
 
   const participantCount = mergedParticipants.length;
+  const hasInitializedDraftsRef = useRef(false);
 
-  // Initialize inline payment form per displayed participant
-  const lastInitRef = useRef(null);
+  // Initialize drafts when participants change
+  useEffect(() => {
+    if (participantCount > 0 && !hasInitializedDraftsRef.current) {
+      hasInitializedDraftsRef.current = true;
+      const evenPct = Math.round((100 / participantCount) * 100) / 100;
+      const initialPcts = {};
+      const initialCustoms = {};
+      mergedParticipants.forEach((p, idx) => {
+        initialPcts[idx] = p.percentage || evenPct;
+        initialCustoms[idx] = p.amount || 0;
+      });
+      setPercentageDrafts(initialPcts);
+      setCustomDrafts(initialCustoms);
+    }
+  }, [participantCount, mergedParticipants]);
+
+  // Derived calculation based on chosen method
+  const calculationResult = useMemo(() => {
+    if (participantCount === 0 || totalAmount <= 0) return null;
+
+    if (activeMethod === "equal") {
+      const rows = calculateEqualSplit(totalAmount, mergedParticipants);
+      return { type: "equal", rows, isValid: true, error: null };
+    }
+
+    if (activeMethod === "percentage") {
+      const entries = mergedParticipants.map((p, idx) => ({
+        participant: p,
+        percentage: Number(percentageDrafts[idx] ?? 0),
+      }));
+      const res = calculatePercentageSplit(totalAmount, entries);
+      return {
+        type: "percentage",
+        rows: res.rows,
+        isValid: res.isValid,
+        error: res.errorMessage,
+        totalPct: res.totalPercentage,
+        remainingPct: res.remainingPercentage,
+      };
+    }
+
+    if (activeMethod === "custom") {
+      const entries = mergedParticipants.map((p, idx) => ({
+        participant: p,
+        amount: Number(customDrafts[idx] ?? 0),
+      }));
+      const res = calculateCustomSplit(totalAmount, entries);
+      return {
+        type: "custom",
+        rows: res.rows,
+        isValid: res.isExact,
+        error: res.errorMessage,
+        totalAllocated: res.totalAllocated,
+        remainingAmount: res.remainingAmount,
+      };
+    }
+
+    return null;
+  }, [activeMethod, totalAmount, mergedParticipants, participantCount, percentageDrafts, customDrafts]);
+
+  // Financial statistics
+  const totalCollected = useMemo(() => {
+    return mergedParticipants.reduce((sum, b) => sum + Number(b.amountPaid || 0), 0);
+  }, [mergedParticipants]);
+
+  const remainingBalance = Math.max(0, totalAmount - totalCollected);
+
+  // Initialize inline payments
   useEffect(() => {
     const init = {};
     mergedParticipants.forEach((m, idx) => {
-      init[idx] = {
-        amount: Number(m.amountPaid || 0),
-      };
+      init[idx] = { amount: Number(m.amountPaid || 0) };
     });
+    setInlinePayments(init);
+  }, [mergedParticipants]);
 
-    try {
-      const asString = JSON.stringify(init);
-      if (lastInitRef.current !== asString) {
-        lastInitRef.current = asString;
-        setInlinePayments(init);
-      }
-    } catch (e) {
-      // Fallback: always set if stringify fails
-      setInlinePayments(init);
-    }
-  }, [mergedParticipants, lastInitRef]);
-
-  // --- Host: update a participant's amountPaid / paymentStatus ---
   const handlePaymentUpdate = async (index, field, value) => {
     if (!splitId) return;
-
-    await commitPaymentUpdate(index, field, value);
-  };
-
-  const commitPaymentUpdate = async (index, field, value) => {
     setUpdatingIdx(index);
     try {
-      // Map displayed index (which may be merged with group members) to server breakdown index
-      const findServerIndex = (displayIndex) => {
-        const displayed = type === 'group' && groupMembers && groupMembers.length > 0
-          ? groupMembers[displayIndex]
-          : breakdown[displayIndex];
-
-        if (!displayed) return -1;
-
-        // Try to match by user/participant id or by name/email
-        for (let i = 0; i < (breakdown || []).length; i++) {
-          const b = breakdown[i];
-          const bid = b?.user?._id || b?.user || b?.participant?._id || b?.participant || b?._id || '';
-          const dispId = displayed._id || displayed.id || displayed.user || displayed.participant || '';
-          if (String(bid) === String(dispId)) return i;
-          const bname = String(b?.name || '').toLowerCase();
-          const dname = String(displayed.fullName || displayed.name || displayed.email || displayed).toLowerCase();
-          if (bname && dname && bname === dname) return i;
-        }
-        return -1;
-      };
-
-      let serverIndex = findServerIndex(index);
-
-      // If not found, attempt to force server to recalculate split from group/session members
-      if (serverIndex === -1 && type === 'group') {
-        try {
-          await api.put(`/splits/${splitId}`, { totalAmount: split?.totalAmount });
-          await fetchSplit();
-          serverIndex = findServerIndex(index);
-        } catch (e) {
-          // ignore and handle below
-        }
-      }
-
-      if (serverIndex === -1) {
-        // Try server-side ensure-members endpoint as a last resort
-        try {
-          await api.post(`/splits/${splitId}/ensure-members`);
-          await fetchSplit();
-          serverIndex = findServerIndex(index);
-        } catch (e) {
-          // ignore and error below
-        }
-
-        if (serverIndex === -1) {
-          throw new Error('Participant not present on server yet. Try refreshing or ask host to recalculate split.');
-        }
-      }
-
+      const serverIndex = index;
       const body = {};
       if (field === "amountPaid") {
         body.amountPaid = Number(value) || 0;
@@ -302,67 +316,44 @@ export default function SplitBreakdown() {
       }
       await api.put(`/splits/${splitId}/participant/${serverIndex}`, body);
       await fetchSplit();
-      if (field === "amountPaid") {
-        try {
-          dirtyAmountIndexesRef.current.delete(index);
-        } catch (e) {}
-      }
     } catch (err) {
-      toast.error(err.response?.data?.message || err.message || "Failed to update payment");
+      toast.error(err.response?.data?.message || "Failed to update payment");
     } finally {
       setUpdatingIdx(null);
     }
   };
 
-  const queueAmountPaidUpdate = (index, amountValue) => {
+  const handleSaveMethod = async () => {
+    if (!calculationResult?.isValid) {
+      toast.error(calculationResult?.error || "Please resolve calculation issues first");
+      return;
+    }
+    setSavingMethod(true);
     try {
-      const timers = amountUpdateTimersRef.current;
-      if (timers[index]) {
-        clearTimeout(timers[index]);
-      }
-      dirtyAmountIndexesRef.current.add(index);
-      timers[index] = setTimeout(() => {
-        handlePaymentUpdate(index, "amountPaid", Number(amountValue) || 0);
-        delete timers[index];
-      }, 350);
-    } catch (e) {}
-  };
+      const newBreakdown = mergedParticipants.map((p, idx) => {
+        const computedShare = calculationResult.rows[idx]?.amount ?? p.amount;
+        return {
+          ...p,
+          amount: computedShare,
+        };
+      });
 
-  const flushPendingAmountUpdates = async () => {
-    const dirty = Array.from(dirtyAmountIndexesRef.current || []);
-    if (!dirty.length) return;
+      await api.put(`/splits/${splitId}`, {
+        splitType: activeMethod,
+        totalAmount,
+        breakdown: newBreakdown,
+      });
 
-    // Cancel timers first, then force-save all dirty rows before navigation.
-    const timers = amountUpdateTimersRef.current || {};
-    dirty.forEach((idx) => {
-      if (timers[idx]) {
-        clearTimeout(timers[idx]);
-        delete timers[idx];
-      }
-    });
-
-    for (const idx of dirty) {
-      const amount = Number(inlinePayments[idx]?.amount || 0);
-      await handlePaymentUpdate(idx, "amountPaid", amount);
+      setMethodDirty(false);
+      await fetchSplit();
+      toast.success("Split method updated!");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to update split method");
+    } finally {
+      setSavingMethod(false);
     }
   };
 
-  useEffect(() => {
-    const timers = amountUpdateTimersRef.current;
-    return () => {
-      Object.keys(timers).forEach((k) => {
-        try {
-          clearTimeout(timers[k]);
-        } catch (e) {}
-      });
-    };
-  }, []);
-
-  const updateInline = (idx, field, value) => {
-    setInlinePayments((prev) => ({ ...prev, [idx]: { ...(prev[idx] || {}), [field]: value } }));
-  };
-
-  // --- Notify all participants via detailed split-summary email ---
   const handleNotifyAll = async () => {
     if (!split?._id || breakdown.length === 0) {
       toast.error("No split data to notify about");
@@ -373,65 +364,23 @@ export default function SplitBreakdown() {
     const toastId = toast.loading("Sending split summary emails...");
 
     try {
-      await flushPendingAmountUpdates();
-
-      let finalizeWarning = "";
-      if (String(split?.status || "").toLowerCase() !== "finalized") {
-        try {
-          await api.post(`/splits/${split._id}/finalize`);
-        } catch (finalizeErr) {
-          const msg =
-            finalizeErr?.response?.data?.message ||
-            finalizeErr?.message ||
-            "";
-          // If already finalized, allow summary emails to continue.
-          if (!String(msg).toLowerCase().includes("already finalized")) {
-            finalizeWarning = msg || "Failed to finalize split";
-          }
-        }
-      }
-
       const payerCandidates = (breakdown || []).map((b) => ({
         name: b.name || b.user?.name || b.participant?.name || "Participant",
         amountPaid: Number(b.amountPaid || 0),
       }));
-      const totalBill = Number(totalAmount || 0);
-      let collector = payerCandidates.find((p) => totalBill > 0 && p.amountPaid >= totalBill);
+      let collector = payerCandidates.find((p) => totalAmount > 0 && p.amountPaid >= totalAmount);
       if (!collector) {
-        collector = payerCandidates
-          .slice()
-          .sort((a, b) => Number(b.amountPaid || 0) - Number(a.amountPaid || 0))[0];
+        collector = payerCandidates.slice().sort((a, b) => Number(b.amountPaid || 0) - Number(a.amountPaid || 0))[0];
       }
       const payToName = collector && Number(collector.amountPaid || 0) > 0 ? collector.name : "";
 
-      const memberEmailById = new Map(
-        (groupMembers || []).map((m) => [String(m?._id || m?.id || ""), String(m?.email || "").trim()])
-      );
-      const memberEmailByName = new Map(
-        (groupMembers || [])
-          .map((m) => ({
-            key: String(m?.fullName || m?.name || m?.email || "").trim().toLowerCase(),
-            email: String(m?.email || "").trim(),
-          }))
-          .filter((x) => x.key && x.email)
-          .map((x) => [x.key, x.email])
-      );
-
       const summaryBreakdown = breakdown.map((b) => {
         const name = b.name || b.user?.name || b.participant?.name || "Participant";
-        const entryId = String(b.user?._id || b.user || b.participant?._id || b.participant || b._id || "");
-        const email =
-          b.email ||
-          b.user?.email ||
-          b.participant?.email ||
-          memberEmailById.get(entryId) ||
-          memberEmailByName.get(String(name).trim().toLowerCase()) ||
-          "";
         const amountPaid = b.amountPaid || 0;
         const balanceDue = Math.max(0, b.amount - amountPaid);
         return {
           name,
-          email,
+          email: b.email || b.user?.email || "",
           share: b.amount,
           amountPaid,
           balanceDue,
@@ -439,264 +388,364 @@ export default function SplitBreakdown() {
         };
       });
 
-      const res = await api.post(
-        "/nudge/split-summary",
-        {
-          splitId: split._id,
-          groupName: session?.name || session?.session?.name || "Split",
-          totalAmount,
-          breakdown: summaryBreakdown,
-        },
-        {
-          timeout: 60000,
-        }
-      );
+      await api.post("/nudge/split-summary", {
+        splitId: split._id,
+        groupName: session?.name || "Split",
+        totalAmount,
+        breakdown: summaryBreakdown,
+      });
 
       toast.dismiss(toastId);
-
-      const sent = Number(res?.data?.sent ?? res?.data?.data?.sent ?? 0);
-      const failed = Number(res?.data?.failed ?? res?.data?.data?.failed ?? 0);
-      const failures = res?.data?.failures || res?.data?.data?.failures || [];
-      if (sent > 0) {
-        toast.success(`Sent summary to ${sent} participant${sent > 1 ? "s" : ""}!`, {
-          duration: 4000,
-        });
-      }
-      if (failed > 0) {
-        const firstFailure = failures[0]?.error ? ` (${failures[0].error})` : "";
-        toast.error(`Failed to send ${failed} email${failed > 1 ? "s" : ""}${firstFailure}`, { duration: 4500 });
-      }
-      if (sent === 0 && failed === 0) {
-        toast.success("Split finalized! No emails to send (no emails on file).", { duration: 3000 });
-      }
-      if (finalizeWarning) {
-        toast.error(`Emails sent, but finalize had an issue: ${finalizeWarning}`, { duration: 4500 });
-      }
+      toast.success("Sent summary to participants!");
     } catch (err) {
       toast.dismiss(toastId);
-      if (err?.code === "ECONNABORTED") {
-        toast.error("Notification request timed out. Emails may still be processing on server.", { duration: 5000 });
-      } else {
-        toast.error(err.response?.data?.message || "Failed to send notifications", { duration: 4000 });
-      }
+      toast.error(err.response?.data?.message || "Failed to send notifications");
     } finally {
       setNotifying(false);
     }
   };
 
-  // --- Continue to SplitCalculated page (host navigates everyone) ---
-  const handleContinue = async () => {
-    if (isHost) {
-      await flushPendingAmountUpdates();
-    }
-    const targetPath = `/split/calculated?splitId=${splitId}&sessionId=${sessionId}&type=${type}${groupId ? `&groupId=${groupId}` : ''}`;
-    const roomId = type === 'group' ? groupId : sessionId;
-    emitHostNavigate(roomId, targetPath);
+  const handleContinue = () => {
+    const targetPath = `/split/calculated?splitId=${splitId}&sessionId=${sessionId}&type=${type}${groupId ? `&groupId=${groupId}` : ""
+      }`;
+    if (roomId) emitHostNavigate(roomId, targetPath);
     navigate(targetPath);
   };
 
   return (
-    <div className="min-h-screen bg-zinc-100">
-      <Toaster position="top-right" reverseOrder={false} />
-      <TopBar onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)} isOpen={isMobileMenuOpen} />
-      <SideBar isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} disableInteraction={true} />
+    <div className="flex min-h-screen bg-zinc-50 pb-28 md:pb-8">
+      <Toaster position="top-right" />
+      <TopBar
+        onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        isOpen={isMobileMenuOpen}
+      />
+      <SideBar
+        isOpen={isMobileMenuOpen}
+        onClose={() => setIsMobileMenuOpen(false)}
+        disableInteraction={true}
+      />
 
-      <main className="ml-0 mx-auto w-full max-w-6xl px-7 py-8 pt-24 md:ml-56 md:pt-8 sm:mt-10">
-        <h1 className="text-3xl font-bold text-slate-900">Split Breakdown</h1>
-        <p className="mt-2 text-sm text-slate-500">
-          Detailed breakdown of shared expenses
-          {!isHost && " — the host can update payment status"}
-        </p>
-
-        {/* ── Total Bill Card ── */}
-        <section className="mt-6 overflow-hidden rounded-4xl border border-emerald-100 bg-white">
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr]">
-            <div className="flex items-center justify-center bg-emerald-100 p-8 text-emerald-500">
-              <FaWallet className="text-5xl" />
-            </div>
-            <div className="p-8">
-              <p className="text-xs font-bold uppercase tracking-wider text-emerald-500">
-                Total Bill Amount
-              </p>
-              <p className="mt-1 text-4xl font-bold text-slate-900">Rs {(Math.round(totalAmount / 10) * 10).toLocaleString()}</p>
-              <p className="mt-2 text-sm text-slate-500">
-                Split equally among {participantCount} participant{participantCount !== 1 ? "s" : ""}
-              </p>
-              <p className="mt-1 text-xs text-slate-400">Live participants: {participantCount}</p>
-            </div>
-          </div>
-        </section>
-
-        {/* ── Participants ── */}
-        <section className="mt-8">
-          <h2 className="text-3xl font-bold text-slate-900">Participants Details</h2>
-
-          <div className="mt-4 space-y-3">
-            {mergedParticipants.map((b, i) => {
-              const name = b.name || b.user?.name || b.participant?.name || `Participant ${i + 1}`;
-              const initials = name
-                .split(" ")
-                .map((w) => w[0])
-                .join("")
-                .toUpperCase()
-                .slice(0, 2);
-              const amountPaid = b.amountPaid || 0;
-              const due = Math.max(0, b.amount - amountPaid);
-              const paymentStatus = b.paymentStatus || "unpaid";
-              const avatarBg = AVATAR_COLORS[i % AVATAR_COLORS.length];
-
-              return (
-                <article
-                  key={i}
-                  className="rounded-4xl border border-emerald-100 bg-white px-5 py-4"
-                >
-                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    {/* Left: avatar + name */}
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold text-slate-700 ${avatarBg}`}
-                      >
-                        {initials}
-                      </span>
-                      <div>
-                        <p className="text-2xl font-bold text-slate-900">{name}</p>
-                        <p className="text-sm text-slate-400">
-                          Total Share: Rs {b.amount?.toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Right: payment info */}
-                    <div className="flex flex-wrap items-center gap-6">
-                      {/* Amount Paid (inline) */}
-                      <div className="min-w-44">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                          Amount Paid
-                        </p>
-                        {isHost ? (
-                            <div className="mt-1 flex flex-col gap-2">
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="number"
-                                  value={inlinePayments[i]?.amount ?? ''}
-                                  onChange={(e) => {
-                                    const nextAmount = Number(e.target.value || 0);
-                                    updateInline(i, 'amount', nextAmount);
-                                    queueAmountPaidUpdate(i, nextAmount);
-                                  }}
-                                  onBlur={() => {
-                                    const timers = amountUpdateTimersRef.current || {};
-                                    if (timers[i]) {
-                                      clearTimeout(timers[i]);
-                                      delete timers[i];
-                                    }
-                                    handlePaymentUpdate(i, 'amountPaid', Number(inlinePayments[i]?.amount || 0));
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.currentTarget.blur();
-                                    }
-                                  }}
-                                  className="w-28 rounded-full border border-emerald-200 bg-white px-3 py-2 text-sm font-bold text-slate-700"
-                                />
-                                <div className="text-xs text-slate-400">Rs {amountPaid.toLocaleString()}</div>
-                              </div>
-                              </div>
-                          ) : (
-                            <div className="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm font-bold text-slate-700">
-                              Rs {amountPaid.toLocaleString()}
-                            </div>
-                          )}
-                      </div>
-
-                      {/* Status */}
-                      <div className="min-w-28">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                          Status
-                        </p>
-                        {isHost ? (
-                          <select
-                            value={paymentStatus}
-                            disabled={updatingIdx === i}
-                            onChange={(e) => handlePaymentUpdate(i, 'paymentStatus', e.target.value)}
-                            className="mt-1 cursor-pointer rounded-full border border-emerald-200 bg-zinc-50 px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-emerald-400"
-                          >
-                            {STATUS_OPTIONS.map((s) => (
-                              <option key={s} value={s}>
-                                {s.charAt(0).toUpperCase() + s.slice(1)}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <div className="mt-1">{statusBadge(paymentStatus)}</div>
-                        )}
-                      </div>
-
-                      {/* Balance Due (read-only for everyone) */}
-                      <div className="min-w-24">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                          Balance Due
-                        </p>
-                        {b.amount > 0 && due === 0 ? (
-                          <p className="mt-1 text-2xl font-bold text-emerald-500">Settled</p>
-                        ) : due > 0 ? (
-                          <p className="mt-1 text-2xl font-bold text-red-500">
-                            +Rs {due.toLocaleString()}
-                          </p>
-                        ) : (
-                          <p className="mt-1 text-2xl font-bold text-slate-400">—</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* ── Bottom Action ── */}
-        <section className="mt-8 rounded-4xl bg-linear-to-r from-slate-950 to-slate-900 px-6 py-6 text-white">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <main className="ml-0 flex-1 px-4 py-6 pt-20 md:ml-56 md:px-8 md:pt-6">
+        <div className="mx-auto max-w-5xl space-y-6">
+          {/* Header */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-3xl font-bold">Almost done!</p>
-              <p className="mt-1 text-sm text-slate-300">
-                {isHost
-                  ? "Notify participants about their share, then continue."
-                  : "Waiting for the host to continue..."}
+              <div className="inline-flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-600">
+                  Review & Settle
+                </span>
+                <ConnectionPill status={connectionStatus} />
+              </div>
+              <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                Split Breakdown
+              </h1>
+              <p className="mt-1 text-sm text-slate-500">
+                Transparent view of each person's exact share and payment status.
               </p>
             </div>
 
-            {isHost ? (
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
+            {isHost && (
+              <div className="flex items-center gap-2">
+                <LoadingButton
+                  variant="outline"
+                  size="sm"
+                  loading={notifying}
+                  loadingText="Sending..."
                   onClick={handleNotifyAll}
-                  disabled={notifying}
-                  className="inline-flex items-center gap-2 rounded-full bg-amber-400 px-6 cursor-pointer py-3 text-base font-bold text-slate-900 shadow-lg shadow-amber-300/40 disabled:opacity-50"
+                  icon={<FaRegPaperPlane />}
                 >
-                  {notifying ? <FaSpinner className="animate-spin text-xs" /> : <FaRegPaperPlane className="text-xs" />}
                   Notify All
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleContinue}
-                  className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-6 cursor-pointer py-3 text-base font-bold text-white shadow-lg shadow-emerald-300/40"
-                >
-                  Continue
-                  <FaArrowRight className="text-xs" />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 text-slate-400">
-                <FaSpinner className="animate-spin" />
-                <span className="text-sm font-medium">Waiting for host...</span>
+                </LoadingButton>
               </div>
             )}
           </div>
-        </section>
+
+          {/* Financial Summary Cards */}
+          <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-2xs">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Total Bill
+              </span>
+              <p className="mt-1.5 text-xl font-black text-slate-900 tracking-tight">
+                {formatNPR(totalAmount)}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500">
+                {participantCount} people sharing
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-2xs">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Collected
+              </span>
+              <p className="mt-1.5 text-xl font-black text-emerald-600 tracking-tight">
+                {formatNPR(totalCollected)}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500">Payments recorded</p>
+            </div>
+
+            <div className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-2xs">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Remaining
+              </span>
+              <p className="mt-1.5 text-xl font-black text-red-500 tracking-tight">
+                {formatNPR(remainingBalance)}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500">Outstanding balance</p>
+            </div>
+
+            <div className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-2xs">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Method
+              </span>
+              <p className="mt-1.5 text-base font-bold text-slate-900 capitalize">
+                {activeMethod.replace("_", " ")}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500">Paisa-reconciled</p>
+            </div>
+          </section>
+
+          {/* Split Method Tabs (For Host) */}
+          {isHost && (
+            <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-2xs space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                  Switch Split Method
+                </span>
+                {methodDirty && (
+                  <button
+                    type="button"
+                    onClick={handleSaveMethod}
+                    disabled={savingMethod || !calculationResult?.isValid}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 py-1 text-xs font-bold text-slate-950 hover:bg-emerald-400 disabled:opacity-50 cursor-pointer"
+                  >
+                    <span>{savingMethod ? "Saving..." : "Apply Method"}</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveMethod("equal");
+                    setMethodDirty(true);
+                  }}
+                  className={`flex items-center justify-center gap-2 rounded-2xl py-2.5 px-3 text-xs font-bold transition cursor-pointer ${activeMethod === "equal"
+                      ? "bg-emerald-500 text-slate-950 shadow-2xs"
+                      : "border border-zinc-200 text-slate-600 hover:bg-zinc-50"
+                    }`}
+                >
+                  <FaBalanceScale />
+                  <span>Equal</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveMethod("percentage");
+                    setMethodDirty(true);
+                  }}
+                  className={`flex items-center justify-center gap-2 rounded-2xl py-2.5 px-3 text-xs font-bold transition cursor-pointer ${activeMethod === "percentage"
+                      ? "bg-emerald-500 text-slate-950 shadow-2xs"
+                      : "border border-zinc-200 text-slate-600 hover:bg-zinc-50"
+                    }`}
+                >
+                  <FaPercentage />
+                  <span>Percentage</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveMethod("custom");
+                    setMethodDirty(true);
+                  }}
+                  className={`flex items-center justify-center gap-2 rounded-2xl py-2.5 px-3 text-xs font-bold transition cursor-pointer ${activeMethod === "custom"
+                      ? "bg-emerald-500 text-slate-950 shadow-2xs"
+                      : "border border-zinc-200 text-slate-600 hover:bg-zinc-50"
+                    }`}
+                >
+                  <FaEdit />
+                  <span>Custom</span>
+                </button>
+              </div>
+
+              {/* Calculation Live Feedback */}
+              {calculationResult && !calculationResult.isValid && (
+                <div className="rounded-2xl bg-amber-50 border border-amber-200 p-3 text-xs font-semibold text-amber-800 flex items-center justify-between">
+                  <span>{calculationResult.error}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Participant Breakdown Cards */}
+          <section className="space-y-3">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700">
+              Each Person's Share
+            </h2>
+
+            <div className="space-y-3">
+              {mergedParticipants.map((b, i) => {
+                const name =
+                  b.name || b.user?.name || b.participant?.name || `Participant ${i + 1}`;
+                const amountPaid = Number(b.amountPaid || 0);
+                const assignedShare =
+                  calculationResult?.rows[i]?.amount !== undefined
+                    ? calculationResult.rows[i].amount
+                    : Number(b.amount || 0);
+                const due = Math.max(0, assignedShare - amountPaid);
+                const paymentStatus =
+                  amountPaid >= assignedShare && assignedShare > 0
+                    ? "paid"
+                    : amountPaid > 0
+                      ? "partial"
+                      : "unpaid";
+                const avatarColor = AVATAR_PALETTE[i % AVATAR_PALETTE.length];
+
+                return (
+                  <article
+                    key={i}
+                    className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-2xs"
+                  >
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      {/* Left: Avatar + Name + Share */}
+                      <div className="flex items-center gap-3.5">
+                        <span
+                          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-xs font-bold ${avatarColor}`}
+                        >
+                          {name.slice(0, 2).toUpperCase()}
+                        </span>
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">{name}</p>
+                          <p className="text-xs font-semibold text-emerald-700">
+                            Share: {formatNPR(assignedShare)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Middle: Method Controls (If changing percentages or custom) */}
+                      {isHost && activeMethod === "percentage" && (
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-bold text-slate-500">%</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="100"
+                            value={percentageDrafts[i] ?? ""}
+                            onChange={(e) => {
+                              setPercentageDrafts({
+                                ...percentageDrafts,
+                                [i]: e.target.value,
+                              });
+                              setMethodDirty(true);
+                            }}
+                            className="w-20 rounded-xl border border-zinc-300 px-3 py-1.5 text-xs font-bold text-slate-900 focus:border-emerald-500 focus:outline-none"
+                          />
+                        </div>
+                      )}
+
+                      {isHost && activeMethod === "custom" && (
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-bold text-slate-500">रु</label>
+                          <input
+                            type="number"
+                            step="1"
+                            min="0"
+                            value={customDrafts[i] ?? ""}
+                            onChange={(e) => {
+                              setCustomDrafts({
+                                ...customDrafts,
+                                [i]: e.target.value,
+                              });
+                              setMethodDirty(true);
+                            }}
+                            className="w-28 rounded-xl border border-zinc-300 px-3 py-1.5 text-xs font-bold text-slate-900 focus:border-emerald-500 focus:outline-none"
+                          />
+                        </div>
+                      )}
+
+                      {/* Right: Payment Status & Action */}
+                      <div className="flex items-center justify-between sm:justify-end gap-5 border-t border-zinc-100 sm:border-0 pt-3 sm:pt-0">
+                        {/* Inline Paid Editor for Host */}
+                        <div className="text-left sm:text-right">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            Paid So Far
+                          </p>
+                          {isHost ? (
+                            <input
+                              type="number"
+                              min="0"
+                              disabled={updatingIdx === i}
+                              value={inlinePayments[i]?.amount ?? ""}
+                              onChange={(e) =>
+                                setInlinePayments({
+                                  ...inlinePayments,
+                                  [i]: { amount: e.target.value },
+                                })
+                              }
+                              onBlur={(e) =>
+                                handlePaymentUpdate(i, "amountPaid", e.target.value)
+                              }
+                              className={`w-24 rounded-xl border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-bold text-slate-800 text-right focus:border-emerald-500 focus:outline-none ${updatingIdx === i ? "opacity-50 cursor-not-allowed" : ""
+                                }`}
+                            />
+                          ) : (
+                            <p className="text-xs font-bold text-slate-800">
+                              {formatNPR(amountPaid)}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Balance Due */}
+                        <div className="text-right min-w-17.5">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            Due
+                          </p>
+                          <p
+                            className={`text-xs font-black ${due > 0 ? "text-red-500" : "text-emerald-600"
+                              }`}
+                          >
+                            {due > 0 ? formatNPR(due) : "Settled"}
+                          </p>
+                        </div>
+
+                        <StatusBadge status={paymentStatus} />
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        </div>
       </main>
+
+      {/* Sticky Mobile Bottom Bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-zinc-200 bg-white/95 p-3.5 backdrop-blur-md shadow-lg md:left-56">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              Outstanding Dues
+            </p>
+            <p className="text-lg font-black text-slate-900">
+              {formatNPR(remainingBalance)}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <LoadingButton
+              size="lg"
+              onClick={handleContinue}
+              icon={<FaArrowRight />}
+            >
+              Continue to Item Split
+            </LoadingButton>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

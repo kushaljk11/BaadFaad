@@ -2,6 +2,13 @@ export function generateUniqueId() {
   return `id-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
+export function getInitials(name = '') {
+  const parts = String(name).trim().split(/\s+/);
+  if (!parts[0]) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 export function base64Decode(base64) {
   if (!base64) {
     console.error("Base64 string is null or undefined");

@@ -33,29 +33,8 @@ import api from "../../config/config";
 import toast from "react-hot-toast";
 import useSessionSocket from "../../hooks/useSessionSocket";
 import { useAuth } from "../../context/authState";
-
-function statusBadge(status) {
-  switch (status) {
-    case "paid":
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
-          <FaCheckCircle className="text-[10px]" /> Paid
-        </span>
-      );
-    case "partial":
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">
-          <FaHourglassHalf className="text-[10px]" /> Partial
-        </span>
-      );
-    default:
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-600">
-          <FaTimesCircle className="text-[10px]" /> Unpaid
-        </span>
-      );
-  }
-}
+import { formatNPR } from "../../utills/formatNPR";
+import { StatusBadge } from "../../components/common/primitives";
 
 export default function SplitCalculated() {
   const navigate = useNavigate();
@@ -273,7 +252,7 @@ export default function SplitCalculated() {
                 Total Bill Amount
               </p>
               <p className="mt-1 text-xl font-bold text-slate-900 md:text-2xl">
-                Rs. {totalAmount.toLocaleString()}
+                {formatNPR(totalAmount)}
               </p>
             </div>
           </div>
@@ -322,7 +301,7 @@ export default function SplitCalculated() {
                   </div>
                   <p className="mt-1 text-xs text-slate-600 md:text-sm">
                     {bigSpenderName
-                      ? `${bigSpenderName} paid Rs. ${(bigSpender?.amountPaid || 0).toLocaleString()} of Rs. ${(bigSpender?.amount || 0).toLocaleString()}`
+                      ? `${bigSpenderName} paid ${formatNPR(bigSpender?.amountPaid || 0)} of ${formatNPR(bigSpender?.amount || 0)}`
                       : "No data yet"}
                   </p>
                   <span className="mt-2 inline-block rounded-full bg-amber-200 px-2 py-1 text-xs font-bold uppercase tracking-wider text-amber-800 md:px-3">
@@ -433,7 +412,7 @@ export default function SplitCalculated() {
                 <h2 className="text-base font-bold text-slate-900 md:text-lg">Payment Methods</h2>
               </div>
               <p className="text-xs font-semibold text-emerald-600 md:text-sm">
-                Payable Amount: Rs. {totalAmount.toLocaleString()}
+                Payable Amount: {formatNPR(totalAmount)}
               </p>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -510,22 +489,22 @@ export default function SplitCalculated() {
                         {p.name}
                       </p>
                       <p className="text-xs text-slate-500">
-                        Share: Rs. {p.share.toLocaleString()}
+                        Share: {formatNPR(p.share)}
                       </p>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1 md:flex-row md:items-center md:gap-3">
                     <div className="text-right">
                       <p className="text-xs text-slate-500">
-                        Paid: <span className="font-bold text-emerald-600">Rs. {p.amountPaid.toLocaleString()}</span>
+                        Paid: <span className="font-bold text-emerald-600">{formatNPR(p.amountPaid)}</span>
                       </p>
                       {p.balanceDue > 0 && (
                         <p className="text-xs text-red-500 font-semibold">
-                          Due: Rs. {p.balanceDue.toLocaleString()}
+                          Due: {formatNPR(p.balanceDue)}
                         </p>
                       )}
                     </div>
-                    {statusBadge(p.paymentStatus)}
+                    <StatusBadge status={p.paymentStatus} />
                   </div>
                 </div>
               ))}
