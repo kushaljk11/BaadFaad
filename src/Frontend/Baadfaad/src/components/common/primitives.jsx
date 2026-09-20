@@ -31,7 +31,7 @@ export function EmptyState({
         <Icon className="text-2xl" />
       </span>
       <div className="max-w-sm">
-        <p className="text-base font-bold text-slate-800">{heading}</p>
+        <p className="text-base font-semibold text-slate-800">{heading}</p>
         {description && <p className="mt-1 text-sm text-slate-500 leading-relaxed">{description}</p>}
       </div>
       {action && <div className="mt-2">{action}</div>}
@@ -56,7 +56,7 @@ export function ErrorBanner({ message, onRetry }) {
         <button
           type="button"
           onClick={onRetry}
-          className="self-end rounded-full border border-red-300 bg-white px-3 py-1 text-xs font-bold text-red-700 hover:bg-red-50 sm:self-auto cursor-pointer"
+          className="self-end rounded-full border border-red-300 bg-white px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-50 sm:self-auto cursor-pointer"
         >
           Retry
         </button>
@@ -77,7 +77,7 @@ export function StatusBadge({ status = 'pending', className = '' }) {
     case 'completed':
       return (
         <span
-          className={`inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 border border-emerald-200 ${className}`}
+          className={`inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200 ${className}`}
         >
           <FaCheckCircle className="text-[10px]" /> Paid
         </span>
@@ -86,7 +86,7 @@ export function StatusBadge({ status = 'pending', className = '' }) {
     case 'partially_paid':
       return (
         <span
-          className={`inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 border border-amber-200 ${className}`}
+          className={`inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 border border-amber-200 ${className}`}
         >
           <FaHourglassHalf className="text-[10px]" /> Partial
         </span>
@@ -95,7 +95,7 @@ export function StatusBadge({ status = 'pending', className = '' }) {
     case 'cancelled':
       return (
         <span
-          className={`inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-700 border border-red-200 ${className}`}
+          className={`inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 border border-red-200 ${className}`}
         >
           <FaTimesCircle className="text-[10px]" /> Failed
         </span>
@@ -144,7 +144,7 @@ export function ConnectionPill({ status = 'connected' }) {
  */
 export function OfflineBanner({ onRetry }) {
   return (
-    <div className="bg-amber-500 text-slate-950 px-4 py-2 text-xs font-bold flex items-center justify-between shadow-xs">
+    <div className="bg-amber-500 text-slate-950 px-4 py-2 text-xs font-semibold flex items-center justify-between shadow-xs">
       <span className="flex items-center gap-2">
         <FaWifi className="text-sm" />
         You are offline. Live splitting, bill scanning, and payments require internet.
@@ -153,7 +153,7 @@ export function OfflineBanner({ onRetry }) {
         <button
           type="button"
           onClick={onRetry}
-          className="rounded-full bg-white px-2.5 py-0.5 text-xs font-bold text-slate-900 shadow-2xs hover:bg-zinc-50 cursor-pointer"
+          className="rounded-full bg-white px-2.5 py-0.5 text-xs font-semibold text-slate-900 shadow-2xs hover:bg-zinc-50 cursor-pointer"
         >
           Retry
         </button>
@@ -257,13 +257,13 @@ export class ErrorBoundary extends Component {
             <FaExclamationTriangle className="text-2xl" />
           </span>
           <div>
-            <p className="text-lg font-bold text-slate-800">Something went wrong</p>
+            <p className="text-lg font-semibold text-slate-800">Something went wrong</p>
             <p className="mt-1 text-sm text-slate-500">{this.state.message}</p>
           </div>
           <button
             type="button"
             onClick={() => this.setState({ hasError: false, message: '' })}
-            className="rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-bold text-slate-950 hover:bg-emerald-400 cursor-pointer"
+            className="rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 cursor-pointer"
           >
             Try again
           </button>

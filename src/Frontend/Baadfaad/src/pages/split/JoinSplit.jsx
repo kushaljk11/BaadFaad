@@ -153,7 +153,7 @@ export default function JoinSplit() {
           <SideBar isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
           <main className="ml-0 flex-1 px-8 py-6 pt-24 md:ml-56 md:pt-6 sm:mt-12">
               <div className="mb-6 text-center">
-                <h1 className="text-3xl font-bold text-slate-900">Join Split Session</h1>
+                <h1 className="text-3xl font-semibold text-slate-900">Join Split Session</h1>
                 <p className="mt-2 text-base text-slate-500">Enter your name to join as a guest</p>
               </div>
 
@@ -179,7 +179,7 @@ export default function JoinSplit() {
                     } catch (err) {
                       toast.dismiss(tId); toast.error(err.response?.data?.message || 'Failed to join');
                     } finally { setJoining(false); }
-                  }} className="rounded-full bg-emerald-400 px-6 py-3 font-bold text-white">Join as guest</button>
+                  }} className="rounded-full bg-emerald-400 px-6 py-3 font-semibold text-white">Join as guest</button>
                   <button onClick={() => { try { localStorage.setItem('postAuthRedirect', JSON.stringify({ pathname: location.pathname, search: location.search })); } catch (e) { console.warn(e); } navigate('/login', { state: { from: location } }) }} className="rounded-full border px-6 py-3">Login</button>
                 </div>
               </div>
@@ -197,7 +197,7 @@ export default function JoinSplit() {
             <p className="text-xl font-semibold text-slate-700 mb-4">You must be logged in to join a session</p>
             <button
               onClick={() => navigate('/login', { state: { from: location } })}
-              className="rounded-full bg-emerald-400 px-6 py-3 font-bold text-white hover:bg-emerald-500"
+              className="rounded-full bg-emerald-400 px-6 py-3 font-semibold text-white hover:bg-emerald-500"
             >
               Go to Login
             </button>
@@ -218,7 +218,7 @@ export default function JoinSplit() {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
               <FaUsers className="text-3xl text-emerald-600" />
             </div>
-            <h1 className="text-3xl font-bold text-slate-900">Join Split Session</h1>
+            <h1 className="text-3xl font-semibold text-slate-900">Join Split Session</h1>
             <p className="mt-2 text-base text-slate-500">
               Enter your details to join this split
             </p>
@@ -243,7 +243,7 @@ export default function JoinSplit() {
               type="button"
               onClick={handleJoin}
               disabled={joining}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-emerald-400 px-8 py-4 text-base font-bold text-white shadow-lg shadow-emerald-300/40 transition hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-emerald-400 px-8 py-4 text-base font-semibold text-white shadow-lg shadow-emerald-300/40 transition hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {joining ? (
                 <>

@@ -265,11 +265,16 @@ export default function Nudge() {
   }
 
   return (
-    <DashboardShell mainClassName="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8 md:ml-56 md:px-8 md:pt-8 sm:mt-10">
+    <DashboardShell
+      hideBottomNav={true}
+      title="Payment Reminders"
+      backTo={groupId ? `/group/${groupId}/settlement` : "/group"}
+      mainClassName="mx-auto max-w-5xl px-4 py-4 sm:px-6 sm:py-8"
+    >
       <section>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-3xl">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-4xl md:text-5xl wrap-break-word">
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-4xl md:text-5xl wrap-break-word">
               Awkwardness Shield
             </h1>
             <p className="mt-2 text-xs sm:text-sm leading-relaxed text-slate-500">
@@ -280,26 +285,26 @@ export default function Nudge() {
           </div>
 
           <div className="text-right">
-            <p className="text-xs font-bold tracking-wider text-slate-600">
+            <p className="text-xs font-semibold tracking-wider text-slate-600">
               GROUP PROGRESS
             </p>
-            <p className="text-3xl font-bold text-emerald-800 sm:text-5xl">{progressPct}%</p>
+            <p className="text-3xl font-semibold text-emerald-800 sm:text-5xl">{progressPct}%</p>
           </div>
         </div>
 
         <div className="mt-6 grid grid-cols-1 gap-3 lg:grid-cols-3">
           <article className="rounded-[1.8rem] border border-zinc-200 bg-white p-5">
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">
               Total Group Balance
             </p>
-            <p className="mt-2 text-2xl font-bold text-slate-900 sm:text-3xl md:text-4xl wrap-break-word">{formatNPR(totalBalance, { decimals: 0 })}</p>
+            <p className="mt-2 text-2xl font-semibold text-slate-900 sm:text-3xl md:text-4xl wrap-break-word">{formatNPR(totalBalance, { decimals: 0 })}</p>
           </article>
 
           <article className="rounded-[1.8rem] border border-zinc-200 bg-white p-5">
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">
               Settled So Far
             </p>
-            <p className="mt-2 text-2xl font-bold text-emerald-800 sm:text-3xl md:text-4xl wrap-break-word">{formatNPR(settledBalance, { decimals: 0 })}</p>
+            <p className="mt-2 text-2xl font-semibold text-emerald-800 sm:text-3xl md:text-4xl wrap-break-word">{formatNPR(settledBalance, { decimals: 0 })}</p>
           </article>
 
           <article className="rounded-[1.8rem] border border-zinc-200 bg-white p-5">
@@ -317,7 +322,7 @@ export default function Nudge() {
           <div className="flex items-start gap-3">
             <FaCheckCircle className="mt-0.5 text-emerald-400" aria-hidden="true" />
             <div>
-              <p className="font-bold">Friendly Reminder Policy</p>
+              <p className="font-semibold">Friendly Reminder Policy</p>
               <p className="mt-1 text-sm text-slate-300">
                 Nudges are sent by BaadFaad system accounts. The recipient
                 won&apos;t see who triggered the reminder, making it a neutral
@@ -330,14 +335,14 @@ export default function Nudge() {
 
       <section className="mt-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-900">Settlement Status</h2>
+          <h2 className="text-xl sm:text-2xl font-semibold text-slate-900">Settlement Status</h2>
           <div className="flex flex-col items-end gap-1">
             <button
               type="button"
               onClick={handleNudgeAll}
               disabled={sendingAll}
               aria-label="Send payment reminder to all pending members"
-              className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-4 py-1.5 sm:px-5 sm:py-2 text-xs sm:text-sm font-bold text-slate-950 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-4 py-1.5 sm:px-5 sm:py-2 text-xs sm:text-sm font-semibold text-slate-950 disabled:opacity-50"
             >
               {sendingAll ? <FaSpinner className="animate-spin text-xs" aria-hidden="true" /> : <FaPaperPlane className="text-xs" aria-hidden="true" />}
               Nudge All Pending
@@ -358,7 +363,7 @@ export default function Nudge() {
                     <FaUserCircle aria-hidden="true" />
                   </span>
                   <div>
-                    <p className="font-bold text-slate-900">{member.name}</p>
+                    <p className="font-semibold text-slate-900">{member.name}</p>
                     <p
                       className={`text-xs ${member.pending ? "text-amber-800 font-semibold" : "text-emerald-800 font-semibold"
                         }`}
@@ -380,17 +385,17 @@ export default function Nudge() {
 
                 <div className="flex flex-wrap items-center justify-between sm:justify-start gap-4 sm:gap-6">
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">
                       Amount
                     </p>
-                    <p className="mt-1 text-xl sm:text-2xl font-bold text-slate-900">
+                    <p className="mt-1 text-xl sm:text-2xl font-semibold text-slate-900">
                       {member.amount}
                     </p>
                   </div>
                   <button
                     type="button"
                     aria-label={`${member.action === "Settled" ? "Already settled" : `Send nudge to ${member.name}`}`}
-                    className={`inline-flex items-center gap-1 rounded-full px-4 py-2 text-xs font-bold ${member.actionStyle}`}
+                    className={`inline-flex items-center gap-1 rounded-full px-4 py-2 text-xs font-semibold ${member.actionStyle}`}
                     disabled={member.action === "Settled" || member.action === "Nudge Sent" || sendingId === member._id}
                     onClick={() => handleSendNudge(member)}
                   >

@@ -1,28 +1,27 @@
 /**
- * @fileoverview Create Split Page
- * @description Frictionless wizard for starting a new bill-splitting session.
- *              Key Features:
- *              - Friendly name input
- *              - Split method selector: Equal, Percentage, Custom, Item-based
- *              - Fast participant addition via ParticipantEntry (type + Enter)
- *              - LoadingButton with double-submission protection
+ * @fileoverview Mobile-First Create Split Page
+ * @description Streamlined mobile journey for setting up a bill split:
+ *              - Back navigation in header
+ *              - Clean un-boxed sections with clear typography
+ *              - Compact thumb-friendly split method selectors
+ *              - Rapid inline participant entry with Enter key
+ *              - Sticky bottom action bar respecting iOS safe areas
  *
  * @module pages/split/CreateSplit
  */
 
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import SideBar from "../../components/layout/Dashboard/SideBar";
-import TopBar from "../../components/layout/Dashboard/TopBar";
+import { useNavigate, Link } from "react-router-dom";
+import DashboardShell from "../../components/layout/Dashboard/DashboardShell";
 import {
-  FaReceipt,
-  FaQrcode,
-  FaUserFriends,
   FaBalanceScale,
   FaPercentage,
   FaListUl,
-  FaEdit,
+  FaCoins,
   FaArrowRight,
+  FaCheck,
+  FaExclamationCircle,
+  FaChevronLeft,
 } from "react-icons/fa";
 import api from "../../config/config";
 import toast, { Toaster } from "react-hot-toast";
@@ -32,33 +31,32 @@ import ParticipantEntry from "../../components/common/ParticipantEntry";
 const SPLIT_METHODS = [
   {
     id: "equal",
-    title: "Equal Split",
-    desc: "Divide total evenly among everyone",
+    title: "Equal",
+    desc: "Split evenly among all",
     icon: FaBalanceScale,
   },
   {
     id: "item_based",
-    title: "Item-by-Item",
-    desc: "Assign specific receipt dishes or items",
+    title: "By item",
+    desc: "Choose who had each item",
     icon: FaListUl,
   },
   {
     id: "percentage",
-    title: "By Percentage",
-    desc: "Split according to custom percentages (100%)",
+    title: "Percentage",
+    desc: "Set percentage shares",
     icon: FaPercentage,
   },
   {
     id: "custom",
-    title: "Custom Amounts",
-    desc: "Specify exact amounts for each person",
-    icon: FaEdit,
+    title: "Custom",
+    desc: "Enter exact amounts",
+    icon: FaCoins,
   },
 ];
 
 export default function CreateSplit() {
   const navigate = useNavigate();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [splitName, setSplitName] = useState("");
   const [splitType, setSplitType] = useState("equal");
   const [participants, setParticipants] = useState([]);
@@ -69,7 +67,7 @@ export default function CreateSplit() {
   const handleCreate = async () => {
     const trimmed = splitName.trim();
     if (!trimmed) {
-      setError("Please give your bill split a name (e.g. Dinner at Dalle)");
+      setError("Please enter a name for your split (e.g. Dinner at Bota)");
       return;
     }
     setError("");
@@ -93,12 +91,21 @@ export default function CreateSplit() {
       }
 
       // 1. Create Split Record
-      const splitRes = await api.post("/splits", {
+      const splitPayload = {
         splitType,
         totalAmount: 0,
         name: trimmed,
-        participants: participants.map((p) => ({ name: p.name })),
-      });
+      };
+
+      const validParticipants = (participants || [])
+        .filter((p) => p && p.name && p.name.trim())
+        .map((p) => ({ name: p.name.trim() }));
+
+      if (validParticipants.length > 0) {
+        splitPayload.participants = validParticipants;
+      }
+
+      const splitRes = await api.post("/splits", splitPayload);
       const split = splitRes.data.split;
 
       // 2. Create Live Session
@@ -128,7 +135,7 @@ export default function CreateSplit() {
           )}`
         );
       } else {
-        toast.success("Session created!");
+        toast.success("Bill split session created!");
         navigate(
           `/split/ready?splitId=${split._id}&sessionId=${session._id}&type=session&invite=${encodeURIComponent(
             inviteToken || ""
@@ -137,7 +144,15 @@ export default function CreateSplit() {
       }
     } catch (err) {
       console.error("Failed to create split:", err);
-      const msg = err.response?.data?.message || "Failed to create split. Please try again.";
+      const fieldErrors = Array.isArray(err.response?.data?.errors)
+        ? err.response.data.errors.map((e) => e.message || `${e.field}: invalid`).join(", ")
+        : "";
+      const msg =
+        fieldErrors ||
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to create split. Please check the details and try again.";
       setError(msg);
       toast.error(msg);
     } finally {
@@ -146,155 +161,198 @@ export default function CreateSplit() {
   };
 
   return (
-    <div className="flex min-h-screen bg-zinc-50">
+    <DashboardShell hideBottomNav={true} backTo="/dashboard">
       <Toaster position="top-center" />
-      <TopBar
-        onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        isOpen={isMobileMenuOpen}
-      />
-      <SideBar
-        isOpen={isMobileMenuOpen}
-        onClose={() => setIsMobileMenuOpen(false)}
-      />
 
-      <main className="ml-0 flex-1 px-4 py-6 pt-20 md:ml-56 md:px-8 md:pt-6">
-        <div className="mx-auto max-w-2xl space-y-6">
-          {/* Header */}
+      <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 py-4 sm:py-6 pb-28 sm:pb-10 space-y-6">
+        {/* Navigation Back Link */}
+        <Link
+          to="/dashboard"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors py-1"
+        >
+          <FaChevronLeft className="text-[10px]" />
+          <span>Back to Dashboard</span>
+        </Link>
+
+        {/* Header */}
+        <div>
+          <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-slate-900">
+            Create split
+          </h1>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Set up the bill and add your friends.
+          </p>
+        </div>
+
+        {/* Section 1: Split Name */}
+        <section className="space-y-2">
+          <label
+            htmlFor="splitName"
+            className="block text-sm font-semibold text-slate-900"
+          >
+            Split Name <span className="text-red-500">*</span>
+          </label>
+          <p className="text-xs text-slate-500">
+            e.g. Dinner at Bota, Friday Coffee, Pokhara Trip
+          </p>
+          <div className="mt-1.5">
+            <input
+              id="splitName"
+              type="text"
+              value={splitName}
+              onChange={(e) => {
+                setSplitName(e.target.value);
+                if (error) setError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && splitName.trim() && !loading) {
+                  e.preventDefault();
+                  handleCreate();
+                }
+              }}
+              placeholder="Enter split name..."
+              className={`w-full min-h-11 rounded-xl border px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 transition-colors ${error
+                  ? "border-red-300 focus:border-red-500 focus:ring-red-100 bg-red-50/20"
+                  : "border-zinc-300 focus:border-emerald-500 focus:ring-emerald-100 bg-white"
+                }`}
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? "splitName-error" : undefined}
+            />
+            {error && (
+              <div
+                id="splitName-error"
+                className="mt-2 flex items-center gap-1.5 text-xs font-medium text-red-600"
+                role="alert"
+              >
+                <FaExclamationCircle className="text-xs shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Section 2: Split Method */}
+        <section className="space-y-2 pt-2 border-t border-zinc-100">
           <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-600">
-              Quick Setup
-            </span>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-              Create a Bill Split
-            </h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Name your split, choose how to divide it, and invite friends.
+            <h2 className="text-sm font-semibold text-slate-900">
+              How do you want to split it?
+            </h2>
+            <p className="text-xs text-slate-500">
+              Choose how the bill will be divided.
             </p>
           </div>
 
-          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xs space-y-6 sm:p-8">
-            {/* Split Title */}
-            <div>
-              <label
-                htmlFor="splitName"
-                className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700"
-              >
-                Split Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="splitName"
-                type="text"
-                value={splitName}
-                onChange={(e) => {
-                  setSplitName(e.target.value);
-                  if (error) setError("");
-                }}
-                placeholder="e.g. Friday Dinner, Road Trip, Office Lunch"
-                className="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-3 focus:ring-emerald-100"
-              />
-              {error && (
-                <p className="mt-1.5 text-xs font-semibold text-red-600" role="alert">
-                  {error}
-                </p>
-              )}
-            </div>
-
-            {/* Split Type Selector */}
-            <div>
-              <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-700">
-                Split Method
-              </label>
-              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                {SPLIT_METHODS.map((m) => {
-                  const Icon = m.icon;
-                  const isSelected = splitType === m.id;
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => setSplitType(m.id)}
-                      className={`flex items-start gap-3 rounded-2xl border p-3.5 text-left transition-all cursor-pointer ${
-                        isSelected
-                          ? "border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-200 shadow-2xs"
-                          : "border-zinc-200 bg-white hover:border-zinc-300"
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-2">
+            {SPLIT_METHODS.map((m) => {
+              const Icon = m.icon;
+              const isSelected = splitType === m.id;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setSplitType(m.id)}
+                  className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-all cursor-pointer min-h-13 touch-manipulation ${isSelected
+                      ? "border-emerald-600 bg-emerald-50/60 ring-1 ring-emerald-600 shadow-2xs"
+                      : "border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50/50"
+                    }`}
+                >
+                  <div
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm transition-colors ${isSelected
+                        ? "bg-emerald-800 text-white"
+                        : "bg-zinc-100 text-slate-600"
                       }`}
-                    >
-                      <span
-                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm ${
-                          isSelected
-                            ? "bg-emerald-500 text-slate-950"
-                            : "bg-zinc-100 text-slate-600"
-                        }`}
-                      >
-                        <Icon />
-                      </span>
-                      <div>
-                        <p className="text-xs font-bold text-slate-900 leading-snug">
-                          {m.title}
-                        </p>
-                        <p className="mt-0.5 text-[11px] text-slate-500 leading-tight">
-                          {m.desc}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Fast Participant Adding */}
-            <div>
-              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700">
-                Add People (Optional now)
-              </label>
-              <p className="mb-2 text-xs text-slate-500">
-                You can add names now or share a QR code in the next step so friends join directly.
-              </p>
-              <ParticipantEntry
-                participants={participants}
-                onChange={setParticipants}
-                placeholder="Type friend's name and press Enter..."
-              />
-            </div>
-
-            {/* Session vs Group Toggle */}
-            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                Split Type
-              </span>
-              <div className="mt-2 flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setMode("session")}
-                  className={`flex-1 rounded-xl py-2 px-3 text-xs font-bold transition cursor-pointer ${
-                    mode === "session"
-                      ? "bg-white text-slate-900 shadow-2xs border border-zinc-200"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  One-time Split
+                  >
+                    <Icon />
+                  </div>
+                  <div className="flex-1 min-w-0 pr-2">
+                    <p className="text-xs sm:text-sm font-semibold text-slate-900 truncate">
+                      {m.title}
+                    </p>
+                    <p className="text-[11px] text-slate-500 truncate">
+                      {m.desc}
+                    </p>
+                  </div>
+                  {isSelected && (
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-800 text-white text-[9px]">
+                      <FaCheck />
+                    </span>
+                  )}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setMode("group")}
-                  className={`flex-1 rounded-xl py-2 px-3 text-xs font-bold transition cursor-pointer ${
-                    mode === "group"
-                      ? "bg-white text-slate-900 shadow-2xs border border-zinc-200"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  Keep in a Group
-                </button>
-              </div>
-            </div>
+              );
+            })}
+          </div>
+        </section>
 
-            {/* Primary Action Button */}
-            <div className="pt-2">
+        {/* Section 3: Add People */}
+        <section className="space-y-2 pt-2 border-t border-zinc-100">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900">
+              Add people
+            </h2>
+            <p className="text-xs text-slate-500">
+              Add friends now, or share a QR code in the next step.
+            </p>
+          </div>
+
+          <div className="mt-1.5">
+            <ParticipantEntry
+              participants={participants}
+              onChange={setParticipants}
+              placeholder="Friend's name and press Enter..."
+            />
+          </div>
+        </section>
+
+        {/* Section 4: Destination */}
+        <section className="space-y-2 pt-2 border-t border-zinc-100">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900">
+              Save destination
+            </h2>
+            <p className="text-xs text-slate-500">
+              Choose whether this is a one-time bill or saved into a group.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 rounded-xl bg-zinc-100 p-1 mt-1.5">
+            <button
+              type="button"
+              onClick={() => setMode("session")}
+              className={`rounded-lg py-2.5 px-3 text-xs font-semibold transition-all cursor-pointer min-h-10 ${mode === "session"
+                  ? "bg-white text-slate-900 shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900"
+                }`}
+            >
+              One-time Split
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("group")}
+              className={`rounded-lg py-2.5 px-3 text-xs font-semibold transition-all cursor-pointer min-h-10 ${mode === "group"
+                  ? "bg-white text-slate-900 shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900"
+                }`}
+            >
+              Save to Group
+            </button>
+          </div>
+        </section>
+
+        {/* Mobile Sticky / Desktop Action Bar */}
+        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-zinc-200 bg-white/95 backdrop-blur-md p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:pt-4">
+          <div className="max-w-2xl mx-auto flex items-center gap-3">
+            <Link
+              to="/dashboard"
+              className="hidden sm:inline-flex items-center justify-center px-4 py-2.5 rounded-xl border border-zinc-200 text-xs font-semibold text-slate-600 hover:bg-zinc-50 transition-colors"
+            >
+              Cancel
+            </Link>
+            <div className="w-full sm:flex-1">
               <LoadingButton
                 fullWidth
                 size="lg"
                 loading={loading}
-                loadingText="Creating Split..."
+                loadingText="Creating..."
                 onClick={handleCreate}
                 icon={<FaArrowRight />}
               >
@@ -303,7 +361,7 @@ export default function CreateSplit() {
             </div>
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </DashboardShell>
   );
 }

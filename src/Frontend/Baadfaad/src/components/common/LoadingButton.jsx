@@ -14,15 +14,15 @@ import { FaSpinner } from 'react-icons/fa';
 
 const VARIANTS = {
   primary:
-    'bg-emerald-500 text-slate-950 font-bold hover:bg-emerald-400 active:bg-emerald-600 focus-visible:ring-emerald-400 shadow-sm',
+    'bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 active:bg-emerald-600 focus-visible:ring-emerald-400 shadow-sm',
   secondary:
-    'bg-slate-900 text-white font-bold hover:bg-slate-800 active:bg-slate-950 focus-visible:ring-slate-700 shadow-sm',
+    'bg-slate-900 text-white font-semibold hover:bg-slate-800 active:bg-slate-950 focus-visible:ring-slate-700 shadow-sm',
   outline:
     'border border-zinc-300 bg-white text-slate-700 font-semibold hover:bg-zinc-50 active:bg-zinc-100 focus-visible:ring-zinc-400',
   ghost:
     'bg-transparent text-slate-600 font-medium hover:bg-zinc-100 active:bg-zinc-200 focus-visible:ring-zinc-400',
   danger:
-    'bg-red-600 text-white font-bold hover:bg-red-500 active:bg-red-700 focus-visible:ring-red-400 shadow-sm',
+    'bg-red-600 text-white font-semibold hover:bg-red-500 active:bg-red-700 focus-visible:ring-red-400 shadow-sm',
 };
 
 const SIZES = {

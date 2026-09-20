@@ -10,8 +10,7 @@
  */
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import SideBar from "../../components/layout/Dashboard/SideBar";
-import TopBar from "../../components/layout/Dashboard/TopBar";
+import DashboardShell from "../../components/layout/Dashboard/DashboardShell";
 import api from "../../config/config";
 import toast from "react-hot-toast";
 import {
@@ -35,7 +34,6 @@ const getInitials = (name) =>
 export default function Settlement() {
   const navigate = useNavigate();
   const { groupId } = useParams();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [group, setGroup] = useState(null);
   const [split, setSplit] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -152,29 +150,20 @@ export default function Settlement() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen bg-zinc-50">
-        <TopBar onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)} isOpen={isMobileMenuOpen} />
-        <SideBar isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
-        <main className="ml-0 flex-1 flex items-center justify-center pt-24 md:ml-56 md:pt-8">
-          <FaSpinner className="animate-spin text-4xl text-emerald-500" aria-label="Loading" />
-        </main>
+      <div className="flex min-h-screen bg-zinc-50 items-center justify-center">
+        <FaSpinner className="animate-spin text-4xl text-emerald-600" aria-label="Loading" />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen bg-zinc-50">
-      <TopBar
-        onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        isOpen={isMobileMenuOpen}
-      />
-      <SideBar
-        isOpen={isMobileMenuOpen}
-        onClose={() => setIsMobileMenuOpen(false)}
-      />
-
-      <main className="ml-0 flex-1 px-4 py-6 pt-24 md:ml-56 md:px-8 md:pt-8 sm:mt-10">
-        <div className="mx-auto max-w-6xl">
+    <DashboardShell
+      hideBottomNav={true}
+      title="Settlement Summary"
+      backTo="/group"
+      mainClassName="mx-auto max-w-5xl px-4 py-4 sm:px-6 sm:py-8"
+    >
+      <div className="w-full">
           {/* Group header with image */}
           {group?.image && (
             <div className="mb-6 overflow-hidden rounded-3xl">
@@ -188,7 +177,7 @@ export default function Settlement() {
 
           <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900 md:text-3xl">
+              <h1 className="text-2xl font-semibold text-slate-900 md:text-3xl">
                 Settlement Summary
               </h1>
               <p className="mt-1 text-xs text-slate-500 md:text-sm">
@@ -207,7 +196,7 @@ export default function Settlement() {
               <button
                 type="button"
                 onClick={handleContinueToNudge}
-                className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-5 py-2 text-xs font-bold text-slate-900 hover:bg-emerald-500"
+                className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-5 py-2 text-xs font-semibold text-slate-900 hover:bg-emerald-500"
               >
                 Continue to Nudge
                 <FaArrowRight className="text-xs" aria-hidden="true" />
@@ -227,7 +216,7 @@ export default function Settlement() {
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">
                 Total Session Expense
               </p>
-              <p className="mt-1 text-3xl font-bold text-slate-900">
+              <p className="mt-1 text-3xl font-semibold text-slate-900">
                 {formatNPR(totalExpense)}
               </p>
               <div className="mt-3 h-1.5 rounded-full bg-zinc-200">
@@ -239,7 +228,7 @@ export default function Settlement() {
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">
                 Total Collected
               </p>
-              <p className="mt-1 text-3xl font-bold text-emerald-800">
+              <p className="mt-1 text-3xl font-semibold text-emerald-800">
                 {formatNPR(totalCollected)}
               </p>
               <div className="mt-3 h-1.5 rounded-full bg-zinc-200">
@@ -254,7 +243,7 @@ export default function Settlement() {
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">
                 Remaining Balance
               </p>
-              <p className="mt-1 text-3xl font-bold text-orange-700">
+              <p className="mt-1 text-3xl font-semibold text-orange-700">
                 {formatNPR(remaining)}
               </p>
               <div className="mt-3 h-1.5 rounded-full bg-zinc-200">
@@ -269,7 +258,7 @@ export default function Settlement() {
           {/* Participant table — desktop grid, mobile card stack */}
           <section aria-label="Participant balances" className="overflow-hidden rounded-3xl border border-zinc-200 bg-white">
             {/* Desktop header */}
-            <div className="hidden grid-cols-[2fr_1fr_1fr_1fr_1.5fr] border-b border-zinc-200 bg-zinc-50 px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-600 md:grid">
+            <div className="hidden grid-cols-[2fr_1fr_1fr_1fr_1.5fr] border-b border-zinc-200 bg-zinc-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-600 md:grid">
               <p>Participant</p>
               <p>Total Share</p>
               <p>Amount Paid</p>
@@ -291,7 +280,7 @@ export default function Settlement() {
                     {/* Desktop row — hidden on mobile */}
                     <div className="hidden md:grid md:grid-cols-[2fr_1fr_1fr_1fr_1.5fr] md:items-center md:gap-3">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-xs font-bold text-slate-700">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-xs font-semibold text-slate-700">
                           {getInitials(person.name)}
                         </div>
                         <div className="min-w-0">
@@ -311,22 +300,22 @@ export default function Settlement() {
                             onBlur={() => saveDueDraft(person)}
                             onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                             disabled={editingDueIdx === person.index}
-                            className="w-28 rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm font-bold text-slate-700"
+                            className="w-28 rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700"
                           />
                         </div>
                       ) : (
-                        <p className={`text-sm font-bold ${person.due > 0 ? "text-orange-700" : "text-emerald-800"}`}>
+                        <p className={`text-sm font-semibold ${person.due > 0 ? "text-orange-700" : "text-emerald-800"}`}>
                           {formatNPR(person.due)}
                         </p>
                       )}
                       <div className="flex flex-wrap items-center gap-2">
                         {person.status === "paid" ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
                             <FaCheckCircle className="text-[9px]" aria-hidden="true" /> Paid
                           </span>
                         ) : (
                           <>
-                            <span className="rounded-full bg-orange-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-orange-800">
+                            <span className="rounded-full bg-orange-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-orange-800">
                               {person.status === "partial" ? "Partial" : "Unpaid"}
                             </span>
                             <button
@@ -346,7 +335,7 @@ export default function Settlement() {
                     <div className="flex flex-col gap-3 md:hidden">
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-xs font-bold text-slate-700">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-xs font-semibold text-slate-700">
                             {getInitials(person.name)}
                           </div>
                           <div className="min-w-0">
@@ -355,27 +344,27 @@ export default function Settlement() {
                           </div>
                         </div>
                         {person.status === "paid" ? (
-                          <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                          <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
                             <FaCheckCircle className="text-[9px]" aria-hidden="true" /> Paid
                           </span>
                         ) : (
-                          <span className="shrink-0 rounded-full bg-orange-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-orange-800">
+                          <span className="shrink-0 rounded-full bg-orange-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-orange-800">
                             {person.status === "partial" ? "Partial" : "Unpaid"}
                           </span>
                         )}
                       </div>
                       <dl className="grid grid-cols-3 gap-2 text-center">
                         <div className="rounded-xl bg-zinc-50 px-2 py-2">
-                          <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-600">Share</dt>
-                          <dd className="mt-0.5 text-sm font-bold text-slate-800">{formatNPR(person.share, { showSymbol: false })}</dd>
+                          <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Share</dt>
+                          <dd className="mt-0.5 text-sm font-semibold text-slate-800">{formatNPR(person.share, { showSymbol: false })}</dd>
                         </div>
                         <div className="rounded-xl bg-zinc-50 px-2 py-2">
-                          <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-600">Paid</dt>
-                          <dd className="mt-0.5 text-sm font-bold text-emerald-800">{formatNPR(person.paid, { showSymbol: false })}</dd>
+                          <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Paid</dt>
+                          <dd className="mt-0.5 text-sm font-semibold text-emerald-800">{formatNPR(person.paid, { showSymbol: false })}</dd>
                         </div>
                         <div className="rounded-xl bg-zinc-50 px-2 py-2">
-                          <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-600">Due</dt>
-                          <dd className={`mt-0.5 text-sm font-bold ${person.due > 0 ? "text-orange-700" : "text-emerald-800"}`}>{formatNPR(person.due, { showSymbol: false })}</dd>
+                          <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Due</dt>
+                          <dd className={`mt-0.5 text-sm font-semibold ${person.due > 0 ? "text-orange-700" : "text-emerald-800"}`}>{formatNPR(person.due, { showSymbol: false })}</dd>
                         </div>
                       </dl>
                       {person.status !== "paid" && (
@@ -401,7 +390,7 @@ export default function Settlement() {
                 <FaRegClock className="text-xs" aria-hidden="true" />
               </div>
               <div>
-                <p className="text-sm font-bold text-slate-800">
+                <p className="text-sm font-semibold text-slate-800">
                   Awaiting {formatNPR(remaining)} total
                 </p>
                 <p className="mt-0.5 text-xs text-slate-500">
@@ -413,14 +402,13 @@ export default function Settlement() {
             <button
               type="button"
               onClick={handleContinueToNudge}
-              className="self-start inline-flex items-center gap-2 rounded-full bg-emerald-400 px-5 py-2.5 text-xs font-bold text-slate-900 hover:bg-emerald-500 md:self-auto"
+              className="self-start inline-flex items-center gap-2 rounded-full bg-emerald-400 px-5 py-2.5 text-xs font-semibold text-slate-900 hover:bg-emerald-500 md:self-auto"
             >
               Continue to Nudge
               <FaArrowRight className="text-xs" aria-hidden="true" />
             </button>
           </section>
         </div>
-      </main>
-    </div>
+    </DashboardShell>
   );
 }

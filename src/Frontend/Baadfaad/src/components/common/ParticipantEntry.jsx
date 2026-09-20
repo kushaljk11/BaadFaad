@@ -106,7 +106,7 @@ export default function ParticipantEntry({
           type="button"
           disabled={disabled || !nameInput.trim()}
           onClick={handleAdd}
-          className="inline-flex items-center gap-1.5 rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-bold text-slate-950 transition hover:bg-emerald-400 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <FaUserPlus className="text-xs" />
           <span>Add</span>
@@ -130,7 +130,7 @@ export default function ParticipantEntry({
                 className="group flex items-center gap-2 rounded-full border border-zinc-200 bg-white py-1 pl-1 pr-2.5 shadow-2xs transition hover:border-zinc-300"
               >
                 <span
-                  className={`flex h-7 w-7 items-center justify-center rounded-full border text-xs font-bold ${colorClass}`}
+                  className={`flex h-7 w-7 items-center justify-center rounded-full border text-xs font-semibold ${colorClass}`}
                 >
                   {getInitials(p.name)}
                 </span>

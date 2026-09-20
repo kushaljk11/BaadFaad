@@ -171,12 +171,12 @@ export default function ReadyToSplit() {
           {/* Header */}
           <div className="text-center">
             <div className="inline-flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-600">
+              <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600">
                 Share & Join
               </span>
               <ConnectionPill status={connectionStatus} />
             </div>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
               Ready to Split!
             </h1>
             <p className="mt-1 text-sm text-slate-500">
@@ -189,10 +189,10 @@ export default function ReadyToSplit() {
           ) : (
             <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xs text-center space-y-5 sm:p-8">
               <div>
-                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 border border-emerald-200">
+                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
                   {type === "group" ? "GROUP SPLIT" : "LIVE SESSION"}
                 </span>
-                <h2 className="mt-2 text-xl font-bold text-slate-900">{splitName}</h2>
+                <h2 className="mt-2 text-xl font-semibold text-slate-900">{splitName}</h2>
               </div>
 
               {/* QR Code Container */}
@@ -220,7 +220,7 @@ export default function ReadyToSplit() {
               {/* Participant Joined Indicator */}
               <div className="rounded-2xl bg-zinc-50 p-3.5 flex items-center justify-between border border-zinc-200 text-xs">
                 <span className="font-semibold text-slate-600">People in Room</span>
-                <span className="font-black text-emerald-600 text-sm">
+                <span className="font-semibold text-emerald-600 text-sm">
                   {participantCount} Joined
                 </span>
               </div>
@@ -230,7 +230,7 @@ export default function ReadyToSplit() {
                 <button
                   type="button"
                   onClick={handleCopyLink}
-                  className="flex items-center justify-center gap-2 rounded-2xl border border-zinc-300 bg-white py-3 text-xs font-bold text-slate-700 hover:bg-zinc-50 active:scale-95 transition cursor-pointer"
+                  className="flex items-center justify-center gap-2 rounded-2xl border border-zinc-300 bg-white py-3 text-xs font-semibold text-slate-700 hover:bg-zinc-50 active:scale-95 transition cursor-pointer"
                 >
                   {copied ? (
                     <>
@@ -248,7 +248,7 @@ export default function ReadyToSplit() {
                 <button
                   type="button"
                   onClick={handleNativeShare}
-                  className="flex items-center justify-center gap-2 rounded-2xl border border-zinc-300 bg-white py-3 text-xs font-bold text-slate-700 hover:bg-zinc-50 active:scale-95 transition cursor-pointer"
+                  className="flex items-center justify-center gap-2 rounded-2xl border border-zinc-300 bg-white py-3 text-xs font-semibold text-slate-700 hover:bg-zinc-50 active:scale-95 transition cursor-pointer"
                 >
                   <FaShareAlt />
                   <span>Share Link</span>
@@ -276,7 +276,7 @@ export default function ReadyToSplit() {
                       }${groupId ? `&groupId=${groupId}` : ""}`
                     )
                   }
-                  className="w-full flex items-center justify-center gap-2 py-3 text-xs font-bold text-slate-600 hover:text-slate-900 cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 py-3 text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
                 >
                   <FaCamera />
                   <span>Scan or Enter Bill Receipt</span>

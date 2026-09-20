@@ -172,7 +172,7 @@ export default function Landing() {
           className="relative mx-auto grid w-full max-w-6xl grid-cols-1 items-center gap-12 lg:grid-cols-2"
         >
           <div className={heroVisible ? "animate-slide-left" : "opacity-0"}>
-            <div className="mb-8 inline-flex items-center gap-2 rounded-full bg-emerald-100 px-4 py-1.5 text-xs font-bold tracking-wider text-emerald-800">
+            <div className="mb-8 inline-flex items-center gap-2 rounded-full bg-emerald-100 px-4 py-1.5 text-xs font-semibold tracking-wider text-emerald-950">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 animate-pulse-ring" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
@@ -180,7 +180,7 @@ export default function Landing() {
               NOW AVAILABLE ACROSS NEPAL
             </div>
 
-            <h1 className="text-5xl font-bold leading-[1.2] tracking-tight text-slate-900 sm:text-6xl lg:text-7xl">
+            <h1 className="text-5xl font-semibold leading-[1.2] tracking-tight text-slate-900 sm:text-6xl lg:text-7xl">
               Split Bills.
               <br />
               <span className="animate-gradient-text bg-size-[200%_auto] bg-linear-to-r from-emerald-400 via-green-500 to-teal-400 bg-clip-text text-transparent">
@@ -199,7 +199,7 @@ export default function Landing() {
               <button
                 type="button"
                 onClick={() => navigate("/login")}
-                className="group cursor-pointer rounded-full bg-emerald-400 px-8 py-4 text-xl font-bold text-slate-900 shadow-lg shadow-emerald-300/60 transition-all duration-300 hover:scale-105 hover:bg-emerald-300 hover:shadow-emerald-300/80 active:scale-95"
+                className="group cursor-pointer rounded-full bg-emerald-400 px-8 py-4 text-xl font-semibold text-slate-900 shadow-lg shadow-emerald-300/60 transition-all duration-300 hover:scale-105 hover:bg-emerald-300 hover:shadow-emerald-300/80 active:scale-95"
               >
                 <span className="inline-flex text-slate-950 items-center gap-2">
                   Start Splitting
@@ -208,7 +208,7 @@ export default function Landing() {
               </button>
               <a
                 href="#how-it-works"
-                className="rounded-full bg-white px-8 py-4 text-xl font-semibold text-emerald-800 shadow transition hover:bg-slate-50 hover:shadow-md"
+                className="rounded-full bg-white px-8 py-4 text-xl font-semibold text-emerald-900 shadow transition hover:bg-slate-50 hover:shadow-md"
               >
                 See How It Works
               </a>
@@ -225,7 +225,7 @@ export default function Landing() {
               </div>
               <p className="text-lg font-medium text-slate-700">
                 Joined by{" "}
-                <span className="font-bold text-slate-700">10k+ groups</span>{" "}
+                <span className="font-semibold text-slate-700">10k+ groups</span>{" "}
                 this month
               </p>
             </div>
@@ -240,17 +240,17 @@ export default function Landing() {
               <div className="h-112 w-56 rounded-[1.8rem] bg-white p-4 sm:h-120 sm:w-64">
                 <div className="mb-4 flex items-center justify-between text-xs text-slate-500">
                   <FaBars />
-                  <span className="inline-flex items-center gap-1 font-bold text-slate-800">
+                  <span className="inline-flex items-center gap-1 font-semibold text-slate-800">
                     TopThumpi  <FaUtensils className="text-[10px]" />
                   </span>
                   <FaBell />
                 </div>
 
                 <div className="rounded-2xl bg-zinc-50 p-4 text-center">
-                  <p className="text-[10px] font-bold tracking-widest text-slate-400">
+                  <p className="text-[10px] font-semibold tracking-widest text-slate-400">
                     TOTAL BILL
                   </p>
-                  <p className="text-4xl font-bold text-slate-900">
+                  <p className="text-4xl font-semibold text-slate-900">
                     Rs.&nbsp;4,250
                   </p>
                 </div>
@@ -266,13 +266,13 @@ export default function Landing() {
                       className={`flex items-center justify-between rounded-2xl px-3 py-2 ${r.cls}`}
                     >
                       <span className="font-semibold text-slate-700">{r.name}</span>
-                      <span className={`font-bold ${r.valCls || "text-slate-800"}`}>{r.val}</span>
+                      <span className={`font-semibold ${r.valCls || "text-slate-800"}`}>{r.val}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className="mt-4 rounded-full bg-emerald-400 px-6 py-3 text-center text-sm font-bold text-slate-900 transition hover:bg-emerald-300">
+              <div className="mt-4 rounded-full bg-emerald-400 px-6 py-3 text-center text-sm font-semibold text-slate-900 transition hover:bg-emerald-300">
                 Settle Up Now
               </div>
             </div>
@@ -288,7 +288,7 @@ export default function Landing() {
       >
         <div className="mx-auto w-full max-w-6xl">
           <div className={`text-center ${painVisible ? "animate-fade-in-up" : "opacity-0"}`}>
-            <h2 className="text-3xl font-bold text-slate-900 sm:text-4xl">
+            <h2 className="text-3xl font-semibold text-slate-900 sm:text-4xl">
               The 10-Minute Awkward Ritual
             </h2>
             <p className="mt-4 text-xl text-slate-500">
@@ -310,7 +310,7 @@ export default function Landing() {
                 <div className={`mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-white ${c.iconCls} transition-transform duration-300 group-hover:scale-110`}>
                   <c.icon className="text-xl" />
                 </div>
-                <h3 className="text-2xl font-bold text-slate-900">{c.title}</h3>
+                <h3 className="text-2xl font-semibold text-slate-900">{c.title}</h3>
                 <p className="mt-4 text-sm leading-relaxed text-slate-500">{c.desc}</p>
               </article>
             ))}
@@ -327,7 +327,7 @@ export default function Landing() {
         <div className="mx-auto w-full max-w-6xl">
           <div className={`flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between ${featVisible ? "animate-fade-in-up" : "opacity-0"}`}>
             <div>
-              <h2 className="text-3xl font-bold text-slate-900 sm:text-4xl">
+              <h2 className="text-3xl font-semibold text-slate-900 sm:text-4xl">
                 Designed for Real Tables{" "}
                 <FaBolt className="inline text-green-600" />
               </h2>
@@ -352,7 +352,7 @@ export default function Landing() {
                 <div className={`mb-6 flex h-12 w-12 items-center justify-center rounded-full ${f.color} transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6`}>
                   <f.icon className="text-lg" />
                 </div>
-                <h3 className="text-xl font-bold text-slate-900 sm:text-2xl">
+                <h3 className="text-xl font-semibold text-slate-900 sm:text-2xl">
                   {f.title}
                 </h3>
                 <p className="mt-4 text-sm leading-relaxed text-slate-500">
@@ -376,7 +376,7 @@ export default function Landing() {
 
         <div className="relative mx-auto w-full max-w-6xl">
           <div className={`text-center ${stepVisible ? "animate-fade-in-up" : "opacity-0"}`}>
-            <h2 className="text-4xl font-bold text-white">
+            <h2 className="text-4xl font-semibold text-white">
               3 Simple Steps to Harmony
             </h2>
             <p className="mt-4 text-lg text-slate-400">
@@ -397,10 +397,10 @@ export default function Landing() {
                 key={s.num}
                 className="animate-fade-in-up group relative text-center"
               >
-                <div className="relative mx-auto mb-6 flex h-18 w-18 items-center justify-center rounded-full bg-emerald-400 text-4xl font-bold text-slate-950 shadow-lg shadow-emerald-400/30 transition-transform duration-300 group-hover:scale-110">
+                <div className="relative mx-auto mb-6 flex h-18 w-18 items-center justify-center rounded-full bg-emerald-400 text-4xl font-semibold text-slate-950 shadow-lg shadow-emerald-400/30 transition-transform duration-300 group-hover:scale-110">
                   {s.num}
                 </div>
-                <h3 className="text-2xl font-bold text-white">{s.title}</h3>
+                <h3 className="text-2xl font-semibold text-white">{s.title}</h3>
                 <p className="mx-auto mt-4 max-w-sm text-sm leading-relaxed text-slate-400">
                   {s.desc}
                 </p>
@@ -417,7 +417,7 @@ export default function Landing() {
       >
         <div className="mx-auto w-full max-w-6xl">
           <div className={`text-center ${testVisible ? "animate-fade-in-up" : "opacity-0"}`}>
-            <h2 className="text-3xl font-bold text-slate-900 sm:text-4xl">
+            <h2 className="text-3xl font-semibold text-slate-900 sm:text-4xl">
               Loved by Real Groups
             </h2>
             <p className="mt-4 text-xl text-slate-500">
@@ -442,11 +442,11 @@ export default function Landing() {
                   &ldquo;{t.text}&rdquo;
                 </p>
                 <div className="mt-6 flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-200 text-sm font-bold text-emerald-700">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-200 text-sm font-semibold text-emerald-700">
                     {t.name.charAt(0)}
                   </span>
                   <div>
-                    <p className="text-sm font-bold text-slate-800">{t.name}</p>
+                    <p className="text-sm font-semibold text-slate-800">{t.name}</p>
                     <p className="text-xs text-slate-400">{t.role}</p>
                   </div>
                 </div>
@@ -465,7 +465,7 @@ export default function Landing() {
           className={`mx-auto grid w-full max-w-6xl grid-cols-1 items-center gap-10 rounded-[2.5rem] bg-emerald-100 px-8 py-10 shadow-sm lg:grid-cols-2 lg:px-14 lg:py-14 ${waVisible ? "animate-fade-in-up" : "opacity-0"}`}
         >
           <div>
-            <h2 className="text-3xl font-bold leading-tight text-slate-900 sm:text-4xl">
+            <h2 className="text-3xl font-semibold leading-tight text-slate-900 sm:text-4xl">
               Ready to kill the awkwardness?
             </h2>
             <p className="mt-6 max-w-xl text-xl leading-relaxed text-slate-500">
@@ -474,7 +474,7 @@ export default function Landing() {
             </p>
             <button
               type="button"
-              className="mt-8 inline-flex items-center gap-2 rounded-full bg-green-500 px-8 py-4 text-xl font-bold text-white shadow-lg shadow-green-300/40 transition-all duration-300 hover:scale-105 hover:bg-green-600 active:scale-95"
+              className="mt-8 inline-flex items-center gap-2 rounded-full bg-green-500 px-8 py-4 text-xl font-semibold text-white shadow-lg shadow-green-300/40 transition-all duration-300 hover:scale-105 hover:bg-green-600 active:scale-95"
             >
               <FaShareAlt className="text-base" />
               Share on WhatsApp
@@ -487,7 +487,7 @@ export default function Landing() {
                 <div className="flex items-center gap-3">
                   <span className="h-12 w-12 rounded-full bg-zinc-200" />
                   <div>
-                    <p className="text-lg font-bold text-slate-800">
+                    <p className="text-lg font-semibold text-slate-800">
                       Mandala Group 2026
                     </p>
                     <p className="text-xs text-emerald-500">online</p>
@@ -501,18 +501,18 @@ export default function Landing() {
                   Aaja ko dinner ko bill split gareko xu hai guys. Heram la!
                 </div>
                 <div className="rounded-2xl border border-emerald-300 bg-emerald-100 px-4 py-3">
-                  <div className="mb-2 flex items-center justify-between text-sm font-bold text-slate-800">
+                  <div className="mb-2 flex items-center justify-between text-sm font-semibold text-slate-800">
                     <span>BaadFaad | Momo Night</span>
                     <FaWhatsapp className="text-emerald-500" />
                   </div>
                   <p className="text-xs text-slate-500">Your Share</p>
                   <div className="mt-1 flex items-center justify-between">
-                    <p className="text-3xl font-bold text-slate-900">
+                    <p className="text-3xl font-semibold text-slate-900">
                       Rs.&nbsp;5,630
                     </p>
                     <button
                       type="button"
-                      className="rounded-full bg-emerald-400 px-4 py-1 text-xs font-bold text-white transition hover:bg-emerald-300"
+                      className="rounded-full bg-emerald-400 px-4 py-1 text-xs font-semibold text-white transition hover:bg-emerald-300"
                     >
                       Pay Now
                     </button>
@@ -542,7 +542,7 @@ export default function Landing() {
           <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-emerald-400/20 text-emerald-400 shadow-lg shadow-emerald-400/10">
             <FaDownload className="text-3xl" />
           </div>
-          <h2 className="text-3xl font-bold text-white sm:text-5xl">
+          <h2 className="text-3xl font-semibold text-white sm:text-5xl">
             Install BaadFaad on Your Phone
           </h2>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-slate-400">
@@ -563,7 +563,7 @@ export default function Landing() {
             type="button"
             onClick={handleInstallClick}
             disabled={pwaInstalled}
-            className={`mt-10 inline-flex items-center gap-2 rounded-full px-10 py-5 text-xl font-bold shadow-lg transition-all duration-300 active:scale-95 ${
+            className={`mt-10 inline-flex items-center gap-2 rounded-full px-10 py-5 text-xl font-semibold shadow-lg transition-all duration-300 active:scale-95 ${
               pwaInstalled
                 ? "bg-emerald-200 text-emerald-700 shadow-emerald-200/20 cursor-default"
                 : "bg-emerald-400 text-slate-900 shadow-emerald-400/30 hover:scale-105 hover:bg-emerald-300 hover:shadow-emerald-300/50"
@@ -577,7 +577,7 @@ export default function Landing() {
       {/* ─── Payment Partners ─────────────────────────────────────────── */}
       <section className="w-full bg-zinc-100 px-6 py-12 sm:px-8 lg:px-16">
         <div className="mx-auto w-full max-w-6xl">
-          <p className="text-center text-sm font-bold tracking-[0.2em] text-slate-700">
+          <p className="text-center text-sm font-semibold tracking-[0.2em] text-slate-700">
             POWERING INSTANT SETTLEMENTS WITH
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-10 sm:gap-14">

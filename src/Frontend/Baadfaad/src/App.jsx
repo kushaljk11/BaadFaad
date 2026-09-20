@@ -65,35 +65,35 @@ function AppContent() {
         <ErrorBoundary>
           <Suspense fallback={LOADER}>
             <Routes>
-            {/* Public Routes */}
-            <Route path="/" element={<Landing />} />
-            <Route path="/about" element={<AboutUs />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-            <Route path="/auth/callback" element={<AuthCallback />} />
+              {/* Public Routes */}
+              <Route path="/" element={<Landing />} />
+              <Route path="/about" element={<AboutUs />} />
+              <Route path="/contact" element={<Contact />} />
+              <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
 
-            {/* Protected Routes - Require Authentication */}
-            <Route path="/dashboard" element={<ProtectedRoute><Home /></ProtectedRoute>} />
-            <Route path="/join-session" element={<ProtectedRoute><JoinSession /></ProtectedRoute>} />
-            <Route path="/split/join" element={<ProtectedRoute><JoinSplit /></ProtectedRoute>} />
-            <Route path="/group/join" element={<ProtectedRoute><JoinSplit /></ProtectedRoute>} />
-            <Route path="/session/join" element={<ProtectedRoute><JoinSplit /></ProtectedRoute>} />
-            <Route path="/split/create" element={<ProtectedRoute><CreateSplit /></ProtectedRoute>} />
-            <Route path="/split/scan" element={<ProtectedRoute><ScanBill /></ProtectedRoute>} />
-            <Route path="/split/ready" element={<ProtectedRoute><ReadyToSplit /></ProtectedRoute>} />
-            <Route path="/split/joined" element={<ProtectedRoute><JoinedParticipants /></ProtectedRoute>} />
-            <Route path="/split/breakdown" element={<ProtectedRoute><SplitBreakdown /></ProtectedRoute>} />
-            <Route path="/split/calculated" element={<ProtectedRoute><SplitCalculated /></ProtectedRoute>} />
-            <Route path="/split/settlement" element={<ProtectedRoute><Settlement /></ProtectedRoute>} />
-            <Route path="/payment" element={<ProtectedRoute><PaymentForm /></ProtectedRoute>} />
-            <Route path="/payment-success" element={<ProtectedRoute><PaymentSuccess /></ProtectedRoute>} />
-            <Route path="/payment-failure" element={<ProtectedRoute><PaymentFailure /></ProtectedRoute>} />
-            <Route path="/group" element={<ProtectedRoute><Group /></ProtectedRoute>} />
-            <Route path="/group/:groupId/settlement" element={<ProtectedRoute><Settlement /></ProtectedRoute>} />
-            <Route path="/group/:groupId/nudge" element={<ProtectedRoute><Nudge /></ProtectedRoute>} />
-            <Route path="/group/details" element={<ProtectedRoute><Group /></ProtectedRoute>} />
-          </Routes>
-        </Suspense>
+              {/* Protected Routes - Require Authentication */}
+              <Route path="/dashboard" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+              <Route path="/join-session" element={<ProtectedRoute><JoinSession /></ProtectedRoute>} />
+              <Route path="/split/join" element={<ProtectedRoute><JoinSplit /></ProtectedRoute>} />
+              <Route path="/group/join" element={<ProtectedRoute><JoinSplit /></ProtectedRoute>} />
+              <Route path="/session/join" element={<ProtectedRoute><JoinSplit /></ProtectedRoute>} />
+              <Route path="/split/create" element={<ProtectedRoute><CreateSplit /></ProtectedRoute>} />
+              <Route path="/split/scan" element={<ProtectedRoute><ScanBill /></ProtectedRoute>} />
+              <Route path="/split/ready" element={<ProtectedRoute><ReadyToSplit /></ProtectedRoute>} />
+              <Route path="/split/joined" element={<ProtectedRoute><JoinedParticipants /></ProtectedRoute>} />
+              <Route path="/split/breakdown" element={<ProtectedRoute><SplitBreakdown /></ProtectedRoute>} />
+              <Route path="/split/calculated" element={<ProtectedRoute><SplitCalculated /></ProtectedRoute>} />
+              <Route path="/split/settlement" element={<ProtectedRoute><Settlement /></ProtectedRoute>} />
+              <Route path="/payment" element={<ProtectedRoute><PaymentForm /></ProtectedRoute>} />
+              <Route path="/payment-success" element={<ProtectedRoute><PaymentSuccess /></ProtectedRoute>} />
+              <Route path="/payment-failure" element={<ProtectedRoute><PaymentFailure /></ProtectedRoute>} />
+              <Route path="/group" element={<ProtectedRoute><Group /></ProtectedRoute>} />
+              <Route path="/group/:groupId/settlement" element={<ProtectedRoute><Settlement /></ProtectedRoute>} />
+              <Route path="/group/:groupId/nudge" element={<ProtectedRoute><Nudge /></ProtectedRoute>} />
+              <Route path="/group/details" element={<ProtectedRoute><Group /></ProtectedRoute>} />
+            </Routes>
+          </Suspense>
         </ErrorBoundary>
       </Router>
     </>

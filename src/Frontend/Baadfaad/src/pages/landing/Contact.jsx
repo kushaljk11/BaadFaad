@@ -60,11 +60,11 @@ export default function Contact() {
 
         <main className="grid flex-1 grid-cols-1 items-center gap-10 py-14 lg:grid-cols-[1fr_1fr]">
           <section>
-            <span className="inline-flex rounded-full bg-emerald-100 px-4 py-1 text-xs font-bold tracking-wider text-emerald-800">
+            <span className="inline-flex rounded-full bg-emerald-100 px-4 py-1 text-xs font-semibold tracking-wider text-emerald-800">
               GET IN TOUCH
             </span>
 
-            <h1 className="mt-6 text-6xl font-bold leading-tight text-slate-950">
+            <h1 className="mt-6 text-6xl font-semibold leading-tight text-slate-950">
               Let&apos;s talk
               <br />
               <span className="text-emerald-700">asap.</span>
@@ -84,10 +84,10 @@ export default function Contact() {
                   <FaWhatsapp />
                 </span>
                 <span>
-                  <span className="block text-xs font-bold tracking-wide text-slate-950">
+                  <span className="block text-xs font-semibold tracking-wide text-slate-950">
                     DIRECT LINE
                   </span>
-                  <span className="text-3xl font-bold text-slate-950">
+                  <span className="text-3xl font-semibold text-slate-950">
                     Ping us on WhatsApp
                   </span>
                 </span>
@@ -100,7 +100,7 @@ export default function Contact() {
                 <FaEnvelope />
               </span>
               <span>
-                <span className="block text-xs font-bold tracking-wide text-slate-600">
+                <span className="block text-xs font-semibold tracking-wide text-slate-600">
                   EMAIL SUPPORT
                 </span>
                 <span className="text-2xl font-semibold text-slate-900">
@@ -110,7 +110,7 @@ export default function Contact() {
             </div>
 
             <div className="mt-10 flex items-center gap-4">
-              <p className="text-xs font-bold tracking-[0.2em] text-slate-600">
+              <p className="text-xs font-semibold tracking-[0.2em] text-slate-600">
                 FOLLOW US
               </p>
               <button
@@ -141,9 +141,9 @@ export default function Contact() {
             {sent ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-500 text-2xl mb-4">✓</div>
-                <p className="text-xl font-bold text-slate-900">Message Sent!</p>
+                <p className="text-xl font-semibold text-slate-900">Message Sent!</p>
                 <p className="mt-2 text-sm text-slate-500">We'll get back to you soon.</p>
-                <button type="button" onClick={() => setSent(false)} className="mt-6 rounded-full bg-emerald-400 px-6 py-3 text-sm font-bold text-slate-900">Send Another</button>
+                <button type="button" onClick={() => setSent(false)} className="mt-6 rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-slate-900">Send Another</button>
               </div>
             ) : (
             <form className="space-y-5" onSubmit={handleSubmit}>
@@ -194,7 +194,7 @@ export default function Contact() {
               <button
                 type="submit"
                 disabled={sending}
-                className="mt-3 w-full rounded-full bg-linear-to-r from-emerald-950 to-slate-900 px-8 py-5 text-lg font-bold text-white shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
+                className="mt-3 w-full rounded-full bg-linear-to-r from-emerald-950 to-slate-900 px-8 py-5 text-lg font-semibold text-white shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {sending ? <FaSpinner className="animate-spin" /> : null}
                 Send Message <span className="text-emerald-300">&gt;</span>

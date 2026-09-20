@@ -114,7 +114,7 @@ const Login = () => {
             <div className="flex justify-center mb-4">
               <img src={logo} alt="BaadFaad Logo" className="w-20 h-20 object-contain" />
             </div>
-            <h1 className="text-3xl font-bold text-gray-800 mb-8">BaadFaad</h1>
+            <h1 className="text-3xl font-semibold text-gray-800 mb-8">BaadFaad</h1>
           </div>
 
           <h2 className="text-2xl font-semibold text-gray-800 text-center mb-2">
@@ -149,7 +149,7 @@ const Login = () => {
           {/* Google Login Button */}
           <button
             onClick={handleGoogleLogin}
-            className="w-full bg-emerald-400 py-3 text-slate-950 font-bold rounded-lg flex items-center justify-center gap-2 transition-colors hover:bg-emerald-300"
+            className="w-full bg-emerald-400 py-3 text-slate-950 font-semibold rounded-lg flex items-center justify-center gap-2 transition-colors hover:bg-emerald-300"
           >
             <span className="w-6 h-6 bg-white rounded flex items-center justify-center">
               <svg className="w-4 h-4" viewBox="0 0 24 24">

@@ -30,11 +30,11 @@ export default function AboutUs() {
         <section className="mx-auto w-full max-w-6xl">
           <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
             <div>
-              <span className="inline-flex items-center rounded-full bg-emerald-100 px-4 py-1 text-xs font-bold tracking-wider text-emerald-800">
+              <span className="inline-flex items-center rounded-full bg-emerald-100 px-4 py-1 text-xs font-semibold tracking-wider text-emerald-800">
                 A SOCIAL SPLITTING APP FOR 2026
               </span>
 
-              <h1 className="mt-6 text-5xl font-bold leading-tight text-slate-900 sm:text-6xl">
+              <h1 className="mt-6 text-5xl font-semibold leading-tight text-slate-900 sm:text-6xl">
                 Built by 
                 <br />
                 <span className="text-emerald-700">Students.</span>
@@ -51,7 +51,7 @@ export default function AboutUs() {
 
               <button
                 type="button"
-                className="mt-8 inline-flex items-center gap-2 rounded-full bg-emerald-400 px-7 py-3 text-sm font-bold text-slate-900 shadow-lg shadow-emerald-300/50 transition hover:bg-emerald-300"
+                className="mt-8 inline-flex items-center gap-2 rounded-full bg-emerald-400 px-7 py-3 text-sm font-semibold text-slate-900 shadow-lg shadow-emerald-300/50 transition hover:bg-emerald-300"
               >
                 Join the Beta <FaArrowRight className="text-xs" />
               </button>
@@ -81,7 +81,7 @@ export default function AboutUs() {
           </div>
 
           <section className="mt-16 grid grid-cols-1 gap-8 lg:grid-cols-[230px_1fr]">
-            <h2 className="flex items-center gap-3 text-2xl font-bold text-slate-900">
+            <h2 className="flex items-center gap-3 text-2xl font-semibold text-slate-900">
               <span className="h-px w-10 bg-emerald-400" />
               Origin Story
             </h2>
@@ -105,7 +105,7 @@ export default function AboutUs() {
               <span className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-500">
                 <FaCheckCircle />
               </span>
-              <h3 className="text-2xl font-bold text-slate-900">Our Mission</h3>
+              <h3 className="text-2xl font-semibold text-slate-900">Our Mission</h3>
               <p className="mt-3 text-slate-700">
                 Remove financial awkwardness from friendships. We believe no one
                 should lose a bond over the way a bill is divided.
@@ -116,7 +116,7 @@ export default function AboutUs() {
               <span className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-violet-100 text-violet-500">
                 <FaCheckCircle />
               </span>
-              <h3 className="text-2xl font-bold text-slate-900">Our Vision</h3>
+              <h3 className="text-2xl font-semibold text-slate-900">Our Vision</h3>
               <p className="mt-3 text-slate-700">
                 Make every shared meal effortless in Nepal. We&apos;re building
                 the infrastructure for a seamless social economy.
@@ -125,7 +125,7 @@ export default function AboutUs() {
           </section>
 
           <section className="mt-16 text-center">
-            <h2 className="text-4xl font-bold text-slate-900">
+            <h2 className="text-4xl font-semibold text-slate-900">
               Meet the <span className="text-emerald-700">Minds</span>
             </h2>
             <p className="mt-2 text-sm text-slate-700">
@@ -135,10 +135,10 @@ export default function AboutUs() {
             <div className="mt-9 grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-5">
               {teamMembers.map((member, index) => (
                 <article key={member.name} className="text-center">
-                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-linear-to-br from-slate-700 to-slate-900 text-sm font-bold text-white shadow">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-linear-to-br from-slate-700 to-slate-900 text-sm font-semibold text-white shadow">
                     {member.initials}
                   </div>
-                  <h3 className="mt-3 text-sm font-bold text-slate-900">
+                  <h3 className="mt-3 text-sm font-semibold text-slate-900">
                     {member.name}
                   </h3>
                   <p
@@ -154,7 +154,7 @@ export default function AboutUs() {
           </section>
 
           <section className="mt-16 rounded-4xl bg-linear-to-r from-slate-950 via-slate-900 to-indigo-950 px-8 py-12 text-center shadow-xl">
-            <h2 className="text-4xl font-bold text-white">
+            <h2 className="text-4xl font-semibold text-white">
               Ready to split smarter?
             </h2>
             <p className="mx-auto mt-3 max-w-2xl text-slate-400">
@@ -164,7 +164,7 @@ export default function AboutUs() {
             <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
               <button
                 type="button"
-                className="rounded-full bg-emerald-400 px-7 py-3 text-sm font-bold text-slate-900 transition hover:bg-emerald-300"
+                className="rounded-full bg-emerald-400 px-7 py-3 text-sm font-semibold text-slate-900 transition hover:bg-emerald-300"
               >
                 Join Beta
               </button>

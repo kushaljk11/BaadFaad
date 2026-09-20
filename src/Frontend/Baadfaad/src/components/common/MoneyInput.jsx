@@ -77,7 +77,7 @@ export default function MoneyInput({
   return (
     <div className={`w-full ${className}`}>
       {label && (
-        <label htmlFor={inputId} className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700">
+        <label htmlFor={inputId} className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-700">
           {label} {required && <span className="text-red-500">*</span>}
         </label>
       )}
@@ -90,7 +90,7 @@ export default function MoneyInput({
             : 'border-zinc-300 bg-white focus-within:border-emerald-500 focus-within:ring-3 focus-within:ring-emerald-100 hover:border-zinc-400'
         }`}
       >
-        <span className="pointer-events-none select-none pl-3.5 pr-2 text-sm font-bold text-slate-500">
+        <span className="pointer-events-none select-none pl-3.5 pr-2 text-sm font-semibold text-slate-500">
           रु
         </span>
         <input

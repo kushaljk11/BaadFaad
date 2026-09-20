@@ -431,12 +431,12 @@ export default function SplitBreakdown() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="inline-flex items-center gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-emerald-600">
+                <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600">
                   Review & Settle
                 </span>
                 <ConnectionPill status={connectionStatus} />
               </div>
-              <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+              <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
                 Split Breakdown
               </h1>
               <p className="mt-1 text-sm text-slate-500">
@@ -463,10 +463,10 @@ export default function SplitBreakdown() {
           {/* Financial Summary Cards */}
           <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-2xs">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                 Total Bill
               </span>
-              <p className="mt-1.5 text-xl font-black text-slate-900 tracking-tight">
+              <p className="mt-1.5 text-xl font-semibold text-slate-900 tracking-tight">
                 {formatNPR(totalAmount)}
               </p>
               <p className="mt-1 text-[11px] text-slate-500">
@@ -475,30 +475,30 @@ export default function SplitBreakdown() {
             </div>
 
             <div className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-2xs">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                 Collected
               </span>
-              <p className="mt-1.5 text-xl font-black text-emerald-600 tracking-tight">
+              <p className="mt-1.5 text-xl font-semibold text-emerald-600 tracking-tight">
                 {formatNPR(totalCollected)}
               </p>
               <p className="mt-1 text-[11px] text-slate-500">Payments recorded</p>
             </div>
 
             <div className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-2xs">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                 Remaining
               </span>
-              <p className="mt-1.5 text-xl font-black text-red-500 tracking-tight">
+              <p className="mt-1.5 text-xl font-semibold text-red-500 tracking-tight">
                 {formatNPR(remainingBalance)}
               </p>
               <p className="mt-1 text-[11px] text-slate-500">Outstanding balance</p>
             </div>
 
             <div className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-2xs">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                 Method
               </span>
-              <p className="mt-1.5 text-base font-bold text-slate-900 capitalize">
+              <p className="mt-1.5 text-base font-semibold text-slate-900 capitalize">
                 {activeMethod.replace("_", " ")}
               </p>
               <p className="mt-1 text-[11px] text-slate-500">Paisa-reconciled</p>
@@ -509,7 +509,7 @@ export default function SplitBreakdown() {
           {isHost && (
             <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-2xs space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-700">
                   Switch Split Method
                 </span>
                 {methodDirty && (
@@ -517,7 +517,7 @@ export default function SplitBreakdown() {
                     type="button"
                     onClick={handleSaveMethod}
                     disabled={savingMethod || !calculationResult?.isValid}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 py-1 text-xs font-bold text-slate-950 hover:bg-emerald-400 disabled:opacity-50 cursor-pointer"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 py-1 text-xs font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-50 cursor-pointer"
                   >
                     <span>{savingMethod ? "Saving..." : "Apply Method"}</span>
                   </button>
@@ -531,7 +531,7 @@ export default function SplitBreakdown() {
                     setActiveMethod("equal");
                     setMethodDirty(true);
                   }}
-                  className={`flex items-center justify-center gap-2 rounded-2xl py-2.5 px-3 text-xs font-bold transition cursor-pointer ${activeMethod === "equal"
+                  className={`flex items-center justify-center gap-2 rounded-2xl py-2.5 px-3 text-xs font-semibold transition cursor-pointer ${activeMethod === "equal"
                       ? "bg-emerald-500 text-slate-950 shadow-2xs"
                       : "border border-zinc-200 text-slate-600 hover:bg-zinc-50"
                     }`}
@@ -546,7 +546,7 @@ export default function SplitBreakdown() {
                     setActiveMethod("percentage");
                     setMethodDirty(true);
                   }}
-                  className={`flex items-center justify-center gap-2 rounded-2xl py-2.5 px-3 text-xs font-bold transition cursor-pointer ${activeMethod === "percentage"
+                  className={`flex items-center justify-center gap-2 rounded-2xl py-2.5 px-3 text-xs font-semibold transition cursor-pointer ${activeMethod === "percentage"
                       ? "bg-emerald-500 text-slate-950 shadow-2xs"
                       : "border border-zinc-200 text-slate-600 hover:bg-zinc-50"
                     }`}
@@ -561,7 +561,7 @@ export default function SplitBreakdown() {
                     setActiveMethod("custom");
                     setMethodDirty(true);
                   }}
-                  className={`flex items-center justify-center gap-2 rounded-2xl py-2.5 px-3 text-xs font-bold transition cursor-pointer ${activeMethod === "custom"
+                  className={`flex items-center justify-center gap-2 rounded-2xl py-2.5 px-3 text-xs font-semibold transition cursor-pointer ${activeMethod === "custom"
                       ? "bg-emerald-500 text-slate-950 shadow-2xs"
                       : "border border-zinc-200 text-slate-600 hover:bg-zinc-50"
                     }`}
@@ -582,7 +582,7 @@ export default function SplitBreakdown() {
 
           {/* Participant Breakdown Cards */}
           <section className="space-y-3">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700">
               Each Person's Share
             </h2>
 
@@ -613,12 +613,12 @@ export default function SplitBreakdown() {
                       {/* Left: Avatar + Name + Share */}
                       <div className="flex items-center gap-3.5">
                         <span
-                          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-xs font-bold ${avatarColor}`}
+                          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-xs font-semibold ${avatarColor}`}
                         >
                           {name.slice(0, 2).toUpperCase()}
                         </span>
                         <div>
-                          <p className="text-sm font-bold text-slate-900">{name}</p>
+                          <p className="text-sm font-semibold text-slate-900">{name}</p>
                           <p className="text-xs font-semibold text-emerald-700">
                             Share: {formatNPR(assignedShare)}
                           </p>
@@ -628,7 +628,7 @@ export default function SplitBreakdown() {
                       {/* Middle: Method Controls (If changing percentages or custom) */}
                       {isHost && activeMethod === "percentage" && (
                         <div className="flex items-center gap-2">
-                          <label className="text-xs font-bold text-slate-500">%</label>
+                          <label className="text-xs font-semibold text-slate-500">%</label>
                           <input
                             type="number"
                             step="0.1"
@@ -642,14 +642,14 @@ export default function SplitBreakdown() {
                               });
                               setMethodDirty(true);
                             }}
-                            className="w-20 rounded-xl border border-zinc-300 px-3 py-1.5 text-xs font-bold text-slate-900 focus:border-emerald-500 focus:outline-none"
+                            className="w-20 rounded-xl border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-slate-900 focus:border-emerald-500 focus:outline-none"
                           />
                         </div>
                       )}
 
                       {isHost && activeMethod === "custom" && (
                         <div className="flex items-center gap-2">
-                          <label className="text-xs font-bold text-slate-500">रु</label>
+                          <label className="text-xs font-semibold text-slate-500">रु</label>
                           <input
                             type="number"
                             step="1"
@@ -662,7 +662,7 @@ export default function SplitBreakdown() {
                               });
                               setMethodDirty(true);
                             }}
-                            className="w-28 rounded-xl border border-zinc-300 px-3 py-1.5 text-xs font-bold text-slate-900 focus:border-emerald-500 focus:outline-none"
+                            className="w-28 rounded-xl border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-slate-900 focus:border-emerald-500 focus:outline-none"
                           />
                         </div>
                       )}
@@ -671,7 +671,7 @@ export default function SplitBreakdown() {
                       <div className="flex items-center justify-between sm:justify-end gap-5 border-t border-zinc-100 sm:border-0 pt-3 sm:pt-0">
                         {/* Inline Paid Editor for Host */}
                         <div className="text-left sm:text-right">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                             Paid So Far
                           </p>
                           {isHost ? (
@@ -689,11 +689,11 @@ export default function SplitBreakdown() {
                               onBlur={(e) =>
                                 handlePaymentUpdate(i, "amountPaid", e.target.value)
                               }
-                              className={`w-24 rounded-xl border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-bold text-slate-800 text-right focus:border-emerald-500 focus:outline-none ${updatingIdx === i ? "opacity-50 cursor-not-allowed" : ""
+                              className={`w-24 rounded-xl border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-slate-800 text-right focus:border-emerald-500 focus:outline-none ${updatingIdx === i ? "opacity-50 cursor-not-allowed" : ""
                                 }`}
                             />
                           ) : (
-                            <p className="text-xs font-bold text-slate-800">
+                            <p className="text-xs font-semibold text-slate-800">
                               {formatNPR(amountPaid)}
                             </p>
                           )}
@@ -701,11 +701,11 @@ export default function SplitBreakdown() {
 
                         {/* Balance Due */}
                         <div className="text-right min-w-17.5">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                             Due
                           </p>
                           <p
-                            className={`text-xs font-black ${due > 0 ? "text-red-500" : "text-emerald-600"
+                            className={`text-xs font-semibold ${due > 0 ? "text-red-500" : "text-emerald-600"
                               }`}
                           >
                             {due > 0 ? formatNPR(due) : "Settled"}
@@ -727,10 +727,10 @@ export default function SplitBreakdown() {
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-zinc-200 bg-white/95 p-3.5 backdrop-blur-md shadow-lg md:left-56">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
               Outstanding Dues
             </p>
-            <p className="text-lg font-black text-slate-900">
+            <p className="text-lg font-semibold text-slate-900">
               {formatNPR(remainingBalance)}
             </p>
           </div>

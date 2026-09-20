@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* Base typography normalization so classes control size reliably */
+h1, h2, h3, h4, h5, h6 {
+  font-size: inherit;
+  font-weight: inherit;
+  margin: 0;
+}
+
 /* Landing page animations */
 @keyframes float {
   0%, 100% { transform: translateY(0) rotate(4deg); }
@@ -61,26 +68,7 @@
 
 
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-  margin-bottom: 1rem;
-}
 
-h2 {
-  font-size: 2em;
-  margin-bottom: 0.75rem;
-}
-
-h3 {
-  font-size: 1.5em;
-  margin-bottom: 0.5rem;
-}
-
-p {
-  margin-bottom: 1rem;
-  line-height: 1.6;
-}
 
 /* PAYMENT FORM STYLES */
 .payment-container {

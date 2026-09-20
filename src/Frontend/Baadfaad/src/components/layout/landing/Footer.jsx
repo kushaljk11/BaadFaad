@@ -24,7 +24,7 @@ export default function Footer() {
                                 alt="BaadFaad logo"
                                 className="h-8 w-8 object-cover"
                             />
-                            <h3 className="text-2xl font-bold text-white">BaadFaad</h3>
+                            <h3 className="text-2xl font-semibold text-white">BaadFaad</h3>
                         </div>
                         <p className="max-w-sm text-lg leading-relaxed text-slate-400">
                             Making finance social and friction-free for the next generation of Nepali youth.

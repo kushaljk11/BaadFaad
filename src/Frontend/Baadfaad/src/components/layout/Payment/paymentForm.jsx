@@ -89,17 +89,17 @@ export default function PaymentForm() {
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="mb-4 inline-flex items-center rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-zinc-50 transition cursor-pointer"
+          className="mb-4 inline-flex items-center rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-zinc-50 transition cursor-pointer"
         >
           ← Back
         </button>
 
         <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xs sm:p-8 space-y-6">
           <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-600">
+            <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600">
               Secure Checkout
             </span>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
               Pay Settlement
             </h1>
             <p className="mt-1 text-xs text-slate-500">
@@ -110,7 +110,7 @@ export default function PaymentForm() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Gateway Selection Cards */}
             <div>
-              <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-700">
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-700">
                 Select Wallet
               </label>
               <div className="grid grid-cols-2 gap-3">
@@ -126,7 +126,7 @@ export default function PaymentForm() {
                   }`}
                 >
                   <img src={esewaLogo} alt="eSewa" className="h-7 object-contain" />
-                  <span className="mt-2 text-xs font-bold text-slate-900">eSewa</span>
+                  <span className="mt-2 text-xs font-semibold text-slate-900">eSewa</span>
                 </button>
 
                 <button
@@ -141,7 +141,7 @@ export default function PaymentForm() {
                   }`}
                 >
                   <img src={khaltiLogo} alt="Khalti" className="h-7 object-contain" />
-                  <span className="mt-2 text-xs font-bold text-slate-900">Khalti</span>
+                  <span className="mt-2 text-xs font-semibold text-slate-900">Khalti</span>
                 </button>
               </div>
             </div>
@@ -160,7 +160,7 @@ export default function PaymentForm() {
             <div>
               <label
                 htmlFor="customerName"
-                className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-700"
+                className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-700"
               >
                 Payer Name
               </label>
@@ -180,7 +180,7 @@ export default function PaymentForm() {
             <div>
               <label
                 htmlFor="customerEmail"
-                className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-700"
+                className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-700"
               >
                 Email Address
               </label>

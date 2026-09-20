@@ -44,7 +44,7 @@ export default function PaymentFailure() {
         </span>
 
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Payment Failed!</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">Payment Failed!</h1>
           <p className="mt-1 text-xs text-slate-500">
             The transaction was not completed. If any amount was deducted, it will be
             reversed by the wallet provider within 1-3 business days.
@@ -70,7 +70,7 @@ export default function PaymentFailure() {
           <button
             type="button"
             onClick={() => navigate("/dashboard")}
-            className="w-full rounded-2xl border border-zinc-300 py-3 text-xs font-bold text-slate-700 hover:bg-zinc-50 transition cursor-pointer"
+            className="w-full rounded-2xl border border-zinc-300 py-3 text-xs font-semibold text-slate-700 hover:bg-zinc-50 transition cursor-pointer"
           >
             Return to Dashboard
           </button>

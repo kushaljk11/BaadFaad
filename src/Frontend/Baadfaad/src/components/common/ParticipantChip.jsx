@@ -54,13 +54,13 @@ export default function ParticipantChip({
         } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${className}`}
     >
       <span
-        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${selected ? 'bg-emerald-500 text-white' : colorClass
+        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${selected ? 'bg-emerald-500 text-white' : colorClass
           }`}
       >
         {selected ? <FaCheck className="text-[10px]" /> : getInitials(name)}
       </span>
       <div className="flex flex-col">
-        <span className="text-xs font-bold text-slate-800 leading-tight">{name}</span>
+        <span className="text-xs font-semibold text-slate-800 leading-tight">{name}</span>
         {amount !== undefined && (
           <span className="text-[11px] font-semibold text-emerald-700">
             {formatNPR(amount)}

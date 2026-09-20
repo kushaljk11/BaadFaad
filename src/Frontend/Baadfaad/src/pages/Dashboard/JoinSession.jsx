@@ -242,7 +242,7 @@ export default function JoinSession() {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
               <FaLink className="text-3xl text-emerald-600" />
             </div>
-            <h1 className="text-3xl font-bold text-slate-900">Join Split Session</h1>
+            <h1 className="text-3xl font-semibold text-slate-900">Join Split Session</h1>
             <p className="mt-2 text-base text-slate-500">
               Paste the session link you received to join
             </p>
@@ -267,7 +267,7 @@ export default function JoinSession() {
               <button
                 type="button"
                 onClick={handleJoinSession}
-                className="flex w-full items-center justify-center gap-2 rounded-full bg-emerald-400 px-8 py-4 text-base font-bold text-white shadow-lg shadow-emerald-300/40 transition hover:bg-emerald-500"
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-emerald-400 px-8 py-4 text-base font-semibold text-white shadow-lg shadow-emerald-300/40 transition hover:bg-emerald-500"
               >
                 Continue
                 <FaArrowRight className="text-sm" />

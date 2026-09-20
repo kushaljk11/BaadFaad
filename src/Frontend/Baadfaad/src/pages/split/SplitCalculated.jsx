@@ -240,7 +240,7 @@ export default function SplitCalculated() {
           {/* Header */}
           <div className="mb-6 flex flex-col items-start gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900 md:text-3xl">
+              <h1 className="text-2xl font-semibold text-slate-900 md:text-3xl">
                 Split Calculated!
               </h1>
               <p className="mt-2 text-sm text-slate-500 md:text-base">
@@ -251,7 +251,7 @@ export default function SplitCalculated() {
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                 Total Bill Amount
               </p>
-              <p className="mt-1 text-xl font-bold text-slate-900 md:text-2xl">
+              <p className="mt-1 text-xl font-semibold text-slate-900 md:text-2xl">
                 {formatNPR(totalAmount)}
               </p>
             </div>
@@ -267,7 +267,7 @@ export default function SplitCalculated() {
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="text-base font-bold text-slate-900">Split Timer</h3>
+                      <h3 className="text-base font-semibold text-slate-900">Split Timer</h3>
                       <FaBolt className="text-amber-500" />
                     </div>
                     <p className="text-xs text-slate-600 md:text-sm">
@@ -276,7 +276,7 @@ export default function SplitCalculated() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-3xl font-bold tabular-nums text-indigo-600 md:text-4xl">
+                  <p className="text-3xl font-semibold tabular-nums text-indigo-600 md:text-4xl">
                     {formatTimer(elapsedSeconds)}
                   </p>
                   <p className="text-xs font-medium text-slate-400">Total time</p>
@@ -295,7 +295,7 @@ export default function SplitCalculated() {
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-base font-bold text-slate-900">
+                    <h3 className="text-base font-semibold text-slate-900">
                       Big Spender <FaFire className="inline text-orange-500" />
                     </h3>
                   </div>
@@ -304,7 +304,7 @@ export default function SplitCalculated() {
                       ? `${bigSpenderName} paid ${formatNPR(bigSpender?.amountPaid || 0)} of ${formatNPR(bigSpender?.amount || 0)}`
                       : "No data yet"}
                   </p>
-                  <span className="mt-2 inline-block rounded-full bg-amber-200 px-2 py-1 text-xs font-bold uppercase tracking-wider text-amber-800 md:px-3">
+                  <span className="mt-2 inline-block rounded-full bg-amber-200 px-2 py-1 text-xs font-semibold uppercase tracking-wider text-amber-800 md:px-3">
                     VIP CONTRIBUTOR
                   </span>
                 </div>
@@ -317,7 +317,7 @@ export default function SplitCalculated() {
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <FaCalculator className="text-emerald-600 text-lg" />
-                    <h3 className="text-base font-bold text-slate-900">
+                    <h3 className="text-base font-semibold text-slate-900">
                       Clean Round Mode
                     </h3>
                   </div>
@@ -346,7 +346,7 @@ export default function SplitCalculated() {
           <div className="mb-6 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm md:rounded-3xl md:p-6">
             <div className="mb-4 flex items-center gap-2">
               <FaReceipt className="text-slate-400" />
-              <h2 className="text-base font-bold text-slate-900 md:text-lg">Tag This Outing</h2>
+              <h2 className="text-base font-semibold text-slate-900 md:text-lg">Tag This Outing</h2>
             </div>
             <div className="flex flex-wrap gap-2">
               {tags.map((tag) => (
@@ -409,7 +409,7 @@ export default function SplitCalculated() {
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FaReceipt className="text-slate-400" />
-                <h2 className="text-base font-bold text-slate-900 md:text-lg">Payment Methods</h2>
+                <h2 className="text-base font-semibold text-slate-900 md:text-lg">Payment Methods</h2>
               </div>
               <p className="text-xs font-semibold text-emerald-600 md:text-sm">
                 Payable Amount: {formatNPR(totalAmount)}
@@ -428,7 +428,7 @@ export default function SplitCalculated() {
                 <div className="mb-2 flex items-center justify-center">
                   <img src={esewaLogo} alt="eSewa" className="h-8 w-8 object-contain md:h-10 md:w-10" />
                 </div>
-                <p className="text-sm font-bold text-slate-900">eSewa</p>
+                <p className="text-sm font-semibold text-slate-900">eSewa</p>
               </button>
               <button
                 type="button"
@@ -442,13 +442,13 @@ export default function SplitCalculated() {
                 <div className="mb-2 flex items-center justify-center">
                   <img src={khaltiLogo} alt="Khalti" className="h-8 w-8 object-contain md:h-10 md:w-10" />
                 </div>
-                <p className="text-sm font-bold text-slate-900">Khalti</p>
+                <p className="text-sm font-semibold text-slate-900">Khalti</p>
               </button>
             </div>
             <button
               type="button"
               onClick={handleProceedToPay}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-slate-900 px-6 py-3 text-sm font-bold text-white transition hover:bg-slate-800 md:px-8 md:py-4 md:text-base"
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 md:px-8 md:py-4 md:text-base"
             >
               ⚡ PROCEED TO PAY
             </button>
@@ -459,7 +459,7 @@ export default function SplitCalculated() {
             <div className="mb-5 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FaReceipt className="text-slate-400" />
-                <h2 className="text-base font-bold text-slate-900 md:text-lg">
+                <h2 className="text-base font-semibold text-slate-900 md:text-lg">
                   Settlement Breakdown
                 </h2>
               </div>
@@ -481,11 +481,11 @@ export default function SplitCalculated() {
                   className="flex items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 md:px-4 md:py-3"
                 >
                   <div className="flex items-center gap-2 md:gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700 md:h-10 md:w-10 md:text-sm">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-xs font-semibold text-emerald-700 md:h-10 md:w-10 md:text-sm">
                       {p.initials}
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-slate-900 md:text-sm">
+                      <p className="text-xs font-semibold text-slate-900 md:text-sm">
                         {p.name}
                       </p>
                       <p className="text-xs text-slate-500">
@@ -496,7 +496,7 @@ export default function SplitCalculated() {
                   <div className="flex flex-col items-end gap-1 md:flex-row md:items-center md:gap-3">
                     <div className="text-right">
                       <p className="text-xs text-slate-500">
-                        Paid: <span className="font-bold text-emerald-600">{formatNPR(p.amountPaid)}</span>
+                        Paid: <span className="font-semibold text-emerald-600">{formatNPR(p.amountPaid)}</span>
                       </p>
                       {p.balanceDue > 0 && (
                         <p className="text-xs text-red-500 font-semibold">
@@ -517,7 +517,7 @@ export default function SplitCalculated() {
               type="button"
               onClick={handleFinish}
               disabled={finishing}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-emerald-400 px-6 py-3 text-base font-bold text-slate-900 shadow-lg shadow-emerald-300/40 transition hover:bg-emerald-500 md:px-8 md:py-4 md:text-lg disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-emerald-400 px-6 py-3 text-base font-semibold text-slate-900 shadow-lg shadow-emerald-300/40 transition hover:bg-emerald-500 md:px-8 md:py-4 md:text-lg disabled:opacity-50"
             >
               {finishing ? <FaSpinner className="animate-spin" /> : <FaArchive />}
               FINISH & ARCHIVE
