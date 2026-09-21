@@ -38,7 +38,7 @@ router.get('/', validate({ query: paginationQuery }), getGroups);
 router.get('/by-split/:splitId', validate({ params: splitIdParams }), getGroupBySplitId);
 router.get('/:groupId', validate({ params: groupIdParams }), getGroupById);
 router.patch('/:groupId', validate({ params: groupIdParams, body: groupUpdateBody }), updateGroup);
-router.post('/:groupId/join', protectStrict, requireOAuthUser, validate({ params: groupIdParams, body: invitationJoinBody }), joinGroup);
+router.post('/:groupId/join', protectStrict, validate({ params: groupIdParams, body: invitationJoinBody }), joinGroup);
 router.post('/:groupId/members', validate({ params: groupIdParams, body: addMemberBody }), addMember);
 router.delete('/:groupId/members/:userId', validate({ params: groupMemberParams }), removeMember);
 router.delete('/:groupId', validate({ params: groupIdParams }), deactivateGroup);

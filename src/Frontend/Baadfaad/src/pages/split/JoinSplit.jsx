@@ -94,22 +94,26 @@ export default function JoinSplit() {
     try {
       const payload = { inviteToken };
 
-      if (effectiveTypeLocal === 'group') {
-        if (!groupId) {
-          throw new Error('Invalid group link');
+      if (effectiveTypeLocal === 'group' && groupId) {
+        try {
+          await api.post(`/groups/${groupId}/join`, payload);
+        } catch (groupJoinErr) {
+          if (sessionId) {
+            await api.post(`/session/join/${sessionId}`, payload);
+          } else {
+            throw groupJoinErr;
+          }
         }
-        await api.post(`/groups/${groupId}/join`, payload);
         toast.dismiss(toastId);
-        toast.success('Joined group successfully!');
-        navigate(`/split/joined?splitId=${splitId}&groupId=${groupId}&type=group`);
-      } else {
+        toast.success('Joined successfully!');
+        navigate(`/split/joined?splitId=${splitId}&groupId=${groupId}&type=group${sessionId ? `&sessionId=${sessionId}` : ''}`);
+      } else if (sessionId) {
         await api.post(`/session/join/${sessionId}`, payload);
         toast.dismiss(toastId);
         toast.success("Joined successfully!");
-        // Navigate to the lobby
         navigate(`/split/joined?splitId=${splitId}&sessionId=${sessionId}&type=${type || 'session'}`);
       }
-      } catch (err) {
+    } catch (err) {
       console.error("Failed to join session:", err);
       joinAttemptKeyRef.current = "";
       toast.dismiss(toastId);
@@ -121,10 +125,10 @@ export default function JoinSplit() {
 
   // Auto-join when user becomes available
   useEffect(() => {
-    if (currentUserId && sessionId) {
+    if (currentUserId && (sessionId || groupId)) {
       handleJoin();
     }
-  }, [currentUserId, sessionId, handleJoin]);
+  }, [currentUserId, sessionId, groupId, handleJoin]);
 
   if (joining) {
     return (

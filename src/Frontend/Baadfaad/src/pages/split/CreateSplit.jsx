@@ -127,11 +127,17 @@ export default function CreateSplit() {
           sessionId: session._id,
         });
         const groupId = groupRes.data?.data?.id || groupRes.data?.data?._id || groupRes.data?.id;
+        let groupInviteToken = inviteToken;
+        if (groupRes.data?.inviteUrl) {
+          try {
+            groupInviteToken = new URL(groupRes.data.inviteUrl).searchParams.get("invite") || inviteToken;
+          } catch {}
+        }
 
         toast.success("Group split created!");
         navigate(
           `/split/ready?splitId=${split._id}&sessionId=${session._id}&type=group&groupId=${groupId}&invite=${encodeURIComponent(
-            inviteToken || ""
+            groupInviteToken || inviteToken || ""
           )}`
         );
       } else {
