@@ -241,7 +241,7 @@ export async function recordSettlementPayment({
       },
       split: splitDto,
     };
-  });
+  }, { maxWait: 15000, timeout: 30000 });
 }
 
 export async function listSettlementPayments(splitId) {

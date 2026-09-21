@@ -322,7 +322,7 @@ export async function createSplitRecord({ createdBy, receiptId, splitType, parti
       }
     }
     return { status: 'created', split: toSplitDto(await tx.split.findUnique({ where: { id: split.id }, include: includeSplit })) };
-  });
+  }, { maxWait: 15000, timeout: 30000 });
 }
 
 export async function findSplitForUser(id, userId) {

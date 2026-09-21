@@ -19,8 +19,11 @@ const fail = (res, error) => {
     return sendResponse(res, 401, false, error.message || 'User session has expired or user does not exist. Please log in again.');
   }
   if (error instanceof TypeError || error instanceof RangeError) return sendResponse(res, 400, false, error.message);
+  if (error?.code === 'P2028') {
+    return sendResponse(res, 503, false, 'Database transaction timed out. Please try again.');
+  }
   console.error('Split operation failed:', error);
-  return sendResponse(res, 500, false, 'Split operation failed');
+  return sendResponse(res, 500, false, error?.message || 'Split operation failed');
 };
 
 export const createSplit = async (req, res) => {
