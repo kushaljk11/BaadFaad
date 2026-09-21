@@ -50,26 +50,36 @@ export default function Home() {
         const res = await api.get(url);
         const splits = res.data.splits || [];
 
-        // Compute balances: You Owe vs You Are Owed
+        // Compute balances: You Owe vs You Are Owed using authoritative netBalance
         let totalOwed = 0;
         let totalDueToMe = 0;
 
+        const normalizeId = (v) => {
+          if (!v) return "";
+          if (typeof v === "string") return v;
+          if (typeof v === "object") return String(v._id || v.id || "");
+          return String(v);
+        };
+        const myUid = normalizeId(userId);
+
         splits.forEach((s) => {
           const breakdown = s.breakdown || [];
-          const isCreator = String(s.createdBy?._id || s.createdBy) === String(userId);
-
-          breakdown.forEach((entry) => {
-            const entryUserId = String(entry.user?._id || entry.user || entry._id);
-            const share = Number(entry.amount || 0);
-            const paid = Number(entry.amountPaid || 0);
-            const diff = share - paid;
-
-            if (entryUserId === String(userId)) {
-              if (diff > 0) totalOwed += diff;
-            } else if (isCreator) {
-              if (diff > 0) totalDueToMe += diff;
-            }
+          const myEntry = breakdown.find((entry) => {
+            const entryUid = normalizeId(entry.user?._id || entry.user || entry.participantId || entry._id);
+            return myUid && entryUid === myUid;
           });
+
+          if (myEntry) {
+            const share = Number(myEntry.amount || 0);
+            const paid = Number(myEntry.amountPaid || myEntry.paidAmount || 0);
+            const net = myEntry.netBalance !== undefined ? Number(myEntry.netBalance) : (paid - share);
+
+            if (net < 0) {
+              totalOwed += Math.abs(net);
+            } else if (net > 0) {
+              totalDueToMe += net;
+            }
+          }
         });
 
         setYouOwe(totalOwed);

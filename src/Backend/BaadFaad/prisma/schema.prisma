@@ -87,6 +87,8 @@ model Split {
   updatedAt              DateTime           @updatedAt
   totalPaisa             BigInt?
   version                Int                @default(1)
+  contributions          Json               @default("[]")
+  settlement             Json               @default("[]")
   relationalParticipants SplitParticipant[]
   relationalPayments     Payment[]
   gatewayTransactions    Transaction[]
@@ -268,6 +270,7 @@ model SplitParticipant {
   displayName        String
   email              String?
   amountPaisa        BigInt
+  paidAmountPaisa    BigInt                 @default(0)
   percentageBps      Int?
   status             SplitParticipantStatus @default(UNPAID)
   sortOrder          Int                    @default(0)

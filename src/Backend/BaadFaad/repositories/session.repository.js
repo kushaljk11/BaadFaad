@@ -59,6 +59,24 @@ export async function createSessionForSplit({ id, name, splitId, ownerId, qrCode
       },
       include: participantInclude,
     });
+    // Ensure backing Group exists for persistent membership across dashboards
+    const existingGroup = await tx.group.findFirst({ where: { OR: [{ splitId }, { sessionId: id }] } });
+    if (!existingGroup) {
+      await tx.group.create({
+        data: {
+          id: crypto.randomUUID(),
+          name,
+          createdBy: ownerId,
+          splitId,
+          sessionId: id,
+          qrCode,
+          members: [ownerId],
+          relationalMembers: {
+            create: { userId: ownerId, role: 'OWNER' },
+          },
+        },
+      });
+    }
     if (invitation) await tx.invitation.create({ data: {
       type: 'SESSION', tokenHash: invitation.tokenHash, createdById: ownerId,
       sessionId: id, expiresAt: endDate, maxUses: invitation.maxUses || 0,
@@ -114,6 +132,25 @@ export async function joinSessionAsUser({ sessionId, userId, inviteToken, requir
         data: { participants: [...legacy, { _id: crypto.randomUUID(), user: userId, name: user.name, email: user.email, joinedAt: new Date() }] },
       });
     }
+
+    // Ensure the registered user is also a member of the linked Group
+    const linkedGroup = await tx.group.findFirst({
+      where: { OR: [{ splitId: session.splitId }, { sessionId }] },
+    });
+    if (linkedGroup) {
+      await tx.groupMember.upsert({
+        where: { groupId_userId: { groupId: linkedGroup.id, userId } },
+        create: { groupId: linkedGroup.id, userId, role: 'MEMBER' },
+        update: { removedAt: null },
+      });
+      if (!linkedGroup.members.includes(userId)) {
+        await tx.group.update({
+          where: { id: linkedGroup.id },
+          data: { members: [...linkedGroup.members, userId] },
+        });
+      }
+    }
+
     return 'joined';
   });
   return { status, session: ['joined', 'exists'].includes(status) ? await findSessionForUser({ id: sessionId, userId }) : null };

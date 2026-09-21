@@ -31,10 +31,10 @@ export default function Group() {
         let all = Array.isArray(payload) ? payload : payload.data || payload.groups || [];
         if (userId) {
           all = all.filter((g) => {
-            const createdBy = g.createdBy?._id || g.createdBy || "";
+            const createdBy = g.createdBy?._id || g.createdBy?.id || g.createdBy || "";
             if (String(createdBy) === String(userId)) return true;
             const members = g.members || [];
-            return members.some((m) => String(m._id || m.id || m) === String(userId));
+            return members.some((m) => String(m?._id || m?.id || m) === String(userId));
           });
         }
         setGroups(all);

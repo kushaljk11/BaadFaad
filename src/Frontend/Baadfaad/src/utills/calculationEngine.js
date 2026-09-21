@@ -348,3 +348,147 @@ export function assertReconciled(totalAmount, rows) {
   const sumPaisa = rows.reduce((sum, r) => sum + (r.amountPaisa !== undefined ? r.amountPaisa : toPaisa(r.amount)), 0n);
   return expectedPaisa === sumPaisa;
 }
+
+/**
+ * Calculates directed settlement transfers between debtors and creditors.
+ * netBalance = paidAmount - shareAmount
+ */
+export function calculateSettlement(participants = []) {
+  if (!Array.isArray(participants) || participants.length === 0) {
+    return {
+      participants: [],
+      transfers: [],
+      totalDebtPaisa: 0n,
+      totalCreditPaisa: 0n,
+    };
+  }
+
+  const normalizedParticipants = participants.map((p, index) => {
+    const id = String(p.id || p.participantId || p.userId || p._id || `p-${index}`);
+    const name = String(p.displayName || p.name || p.fullName || `Participant ${index + 1}`);
+
+    const sharePaisa = p.shareAmountPaisa !== undefined
+      ? BigInt(p.shareAmountPaisa)
+      : p.amountPaisa !== undefined
+        ? BigInt(p.amountPaisa)
+        : toPaisa(p.shareAmount ?? p.share ?? p.amount ?? 0);
+
+    const paidPaisa = p.paidAmountPaisa !== undefined
+      ? BigInt(p.paidAmountPaisa)
+      : toPaisa(p.paidAmount ?? 0);
+
+    const netPaisa = paidPaisa - sharePaisa;
+
+    let status = 'settled';
+    if (netPaisa > 0n) status = 'creditor';
+    else if (netPaisa < 0n) status = 'debtor';
+
+    return {
+      id,
+      name,
+      shareAmount: fromPaisa(sharePaisa),
+      paidAmount: fromPaisa(paidPaisa),
+      netBalance: fromPaisa(netPaisa),
+      shareAmountPaisa: sharePaisa,
+      paidAmountPaisa: paidPaisa,
+      netBalancePaisa: netPaisa,
+      status,
+    };
+  });
+
+  const debtors = [];
+  const creditors = [];
+  let totalDebtPaisa = 0n;
+  let totalCreditPaisa = 0n;
+
+  for (const p of normalizedParticipants) {
+    if (p.netBalancePaisa < 0n) {
+      const debt = -p.netBalancePaisa;
+      debtors.push({ id: p.id, name: p.name, remainingPaisa: debt });
+      totalDebtPaisa += debt;
+    } else if (p.netBalancePaisa > 0n) {
+      const credit = p.netBalancePaisa;
+      creditors.push({ id: p.id, name: p.name, remainingPaisa: credit });
+      totalCreditPaisa += credit;
+    }
+  }
+
+  debtors.sort((a, b) => (a.remainingPaisa > b.remainingPaisa ? -1 : 1));
+  creditors.sort((a, b) => (a.remainingPaisa > b.remainingPaisa ? -1 : 1));
+
+  const transfers = [];
+  let dIndex = 0;
+  let cIndex = 0;
+
+  while (dIndex < debtors.length && cIndex < creditors.length) {
+    const debtor = debtors[dIndex];
+    const creditor = creditors[cIndex];
+
+    if (debtor.remainingPaisa === 0n) {
+      dIndex++;
+      continue;
+    }
+    if (creditor.remainingPaisa === 0n) {
+      cIndex++;
+      continue;
+    }
+
+    const transferPaisa = debtor.remainingPaisa < creditor.remainingPaisa
+      ? debtor.remainingPaisa
+      : creditor.remainingPaisa;
+
+    if (transferPaisa > 0n) {
+      transfers.push({
+        fromParticipantId: debtor.id,
+        fromName: debtor.name,
+        toParticipantId: creditor.id,
+        toName: creditor.name,
+        amount: fromPaisa(transferPaisa),
+        amountPaisa: transferPaisa,
+      });
+
+      debtor.remainingPaisa -= transferPaisa;
+      creditor.remainingPaisa -= transferPaisa;
+    }
+
+    if (debtor.remainingPaisa === 0n) dIndex++;
+    if (creditor.remainingPaisa === 0n) cIndex++;
+  }
+
+  return {
+    participants: normalizedParticipants,
+    transfers,
+    totalDebtPaisa,
+    totalCreditPaisa,
+  };
+}
+
+/**
+ * Computes live contribution summary: assigned vs remaining.
+ */
+export function getContributionSummary(totalAmount, contributions = []) {
+  const totalPaisa = toPaisa(totalAmount);
+  let assignedPaisa = 0n;
+
+  if (Array.isArray(contributions)) {
+    for (const c of contributions) {
+      const val = c.paidAmountPaisa !== undefined
+        ? BigInt(c.paidAmountPaisa)
+        : c.amountPaisa !== undefined
+          ? BigInt(c.amountPaisa)
+          : toPaisa(c.paidAmount ?? c.amount ?? 0);
+      if (val > 0n) assignedPaisa += val;
+    }
+  }
+
+  const remainingPaisa = totalPaisa - assignedPaisa;
+  return {
+    totalPaisa,
+    assignedPaisa,
+    remainingPaisa,
+    total: fromPaisa(totalPaisa),
+    assigned: fromPaisa(assignedPaisa),
+    remaining: fromPaisa(remainingPaisa),
+    isExact: remainingPaisa === 0n,
+  };
+}

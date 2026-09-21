@@ -35,6 +35,7 @@ import {
   ConnectionPill,
 } from "../../components/common/primitives";
 import LoadingButton from "../../components/common/LoadingButton";
+import ContributionManager from "../../components/split/ContributionManager";
 import {
   calculateEqualSplit,
   calculatePercentageSplit,
@@ -183,11 +184,19 @@ export default function SplitBreakdown() {
 
     try {
       socket.on("split-updated", handler);
+      socket.on("split:updated", handler);
+      socket.on("contribution:updated", handler);
+      socket.on("settlement:updated", handler);
+      socket.on("session:completed", handler);
     } catch (e) { }
 
     return () => {
       try {
         socket.off("split-updated", handler);
+        socket.off("split:updated", handler);
+        socket.off("contribution:updated", handler);
+        socket.off("settlement:updated", handler);
+        socket.off("session:completed", handler);
       } catch (e) { }
     };
   }, [roomId, splitId, fetchSplit]);
@@ -580,27 +589,38 @@ export default function SplitBreakdown() {
             </div>
           )}
 
+          {/* Who Paid This Bill? Contribution Section */}
+          <ContributionManager
+            split={split}
+            participants={mergedParticipants}
+            totalAmount={totalAmount}
+            isHost={isHost}
+            onUpdated={() => fetchSplit()}
+          />
+
           {/* Participant Breakdown Cards */}
           <section className="space-y-3">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700">
-              Each Person's Share
+              Each Person's Share & Balances
             </h2>
 
             <div className="space-y-3">
               {mergedParticipants.map((b, i) => {
                 const name =
                   b.name || b.user?.name || b.participant?.name || `Participant ${i + 1}`;
-                const amountPaid = Number(b.amountPaid || 0);
                 const assignedShare =
                   calculationResult?.rows[i]?.amount !== undefined
                     ? calculationResult.rows[i].amount
-                    : Number(b.amount || 0);
-                const due = Math.max(0, assignedShare - amountPaid);
+                    : Number(b.shareAmount ?? b.amount ?? 0);
+                const actualPaid = Number(b.paidAmount ?? 0);
+                const netBalance = b.netBalance !== undefined
+                  ? Number(b.netBalance)
+                  : actualPaid - assignedShare;
                 const paymentStatus =
-                  amountPaid >= assignedShare && assignedShare > 0
+                  netBalance === 0
                     ? "paid"
-                    : amountPaid > 0
-                      ? "partial"
+                    : netBalance > 0
+                      ? "paid"
                       : "unpaid";
                 const avatarColor = AVATAR_PALETTE[i % AVATAR_PALETTE.length];
 
@@ -610,7 +630,7 @@ export default function SplitBreakdown() {
                     className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-2xs"
                   >
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                      {/* Left: Avatar + Name + Share */}
+                      {/* Left: Avatar + Name + Share & Paid */}
                       <div className="flex items-center gap-3.5">
                         <span
                           className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-xs font-semibold ${avatarColor}`}
@@ -619,9 +639,15 @@ export default function SplitBreakdown() {
                         </span>
                         <div>
                           <p className="text-sm font-semibold text-slate-900">{name}</p>
-                          <p className="text-xs font-semibold text-emerald-700">
-                            Share: {formatNPR(assignedShare)}
-                          </p>
+                          <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs">
+                            <span className="font-semibold text-slate-700">
+                              Share: {formatNPR(assignedShare)}
+                            </span>
+                            <span className="text-slate-300">•</span>
+                            <span className="text-slate-600">
+                              Paid: {formatNPR(actualPaid)}
+                            </span>
+                          </div>
                         </div>
                       </div>
 
@@ -699,20 +725,32 @@ export default function SplitBreakdown() {
                           )}
                         </div>
 
-                        {/* Balance Due */}
-                        <div className="text-right min-w-17.5">
+                        {/* Net Position */}
+                        <div className="text-right min-w-20">
                           <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                            Due
+                            Net Balance
                           </p>
                           <p
-                            className={`text-xs font-semibold ${due > 0 ? "text-red-500" : "text-emerald-600"
-                              }`}
+                            className={`text-xs font-semibold ${
+                              netBalance > 0
+                                ? "text-emerald-600"
+                                : netBalance < 0
+                                ? "text-rose-600"
+                                : "text-slate-500"
+                            }`}
                           >
-                            {due > 0 ? formatNPR(due) : "Settled"}
+                            {netBalance > 0
+                              ? `+${formatNPR(netBalance)}`
+                              : netBalance < 0
+                              ? `-${formatNPR(Math.abs(netBalance))}`
+                              : "Settled"}
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            {netBalance > 0 ? "Receives" : netBalance < 0 ? "Owes" : "All clear"}
                           </p>
                         </div>
 
-                        <StatusBadge status={paymentStatus} />
+                        <StatusBadge status={netBalance === 0 ? "paid" : netBalance > 0 ? "paid" : "unpaid"} />
                       </div>
                     </div>
                   </article>

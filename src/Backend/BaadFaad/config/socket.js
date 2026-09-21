@@ -128,3 +128,30 @@ export const getIO = () => {
   }
   return io;
 };
+
+/**
+ * Broadcast an event to all clients / rooms connected to a split session.
+ */
+export const broadcastSplitEvent = async (splitId, eventName, payload = {}) => {
+  if (!io || !splitId) return;
+  try {
+    const data = { splitId, ...payload };
+    io.emit('split-updated', data);
+    io.emit(eventName, data);
+
+    const { getPrisma } = await import('./prisma.js');
+    const prisma = getPrisma();
+    const sessions = await prisma.session.findMany({ where: { splitId }, select: { id: true } });
+    for (const s of sessions) {
+      io.to(s.id).emit(eventName, data);
+      io.to(s.id).emit('split-updated', data);
+    }
+    const groups = await prisma.group.findMany({ where: { splitId }, select: { id: true } });
+    for (const g of groups) {
+      io.to(g.id).emit(eventName, data);
+      io.to(g.id).emit('split-updated', data);
+    }
+  } catch (err) {
+    console.warn('broadcastSplitEvent non-fatal error:', err?.message || err);
+  }
+};

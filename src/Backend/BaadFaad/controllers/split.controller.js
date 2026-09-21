@@ -1,4 +1,4 @@
-import { getIO } from '../config/socket.js';
+import { getIO, broadcastSplitEvent } from '../config/socket.js';
 import { sendResponse } from '../utils/response.js';
 import {
   createSplitRecord,
@@ -7,6 +7,7 @@ import {
   findSplitForUser,
   listSplitsForUser,
   updateOwnedSplit,
+  updateSplitContributions,
   updateSplitParticipantStatus,
 } from '../repositories/split.repository.js';
 import { paginationFrom, paginationMeta } from '../utils/pagination.js';
@@ -29,6 +30,7 @@ export const createSplit = async (req, res) => {
       splitType: req.body?.splitType,
       participants: req.body?.participants,
       breakdown: req.body?.breakdown,
+      contributions: req.body?.contributions,
       name: req.body?.name,
       totalAmount,
     });
@@ -57,7 +59,24 @@ export const updateSplit = async (req, res) => {
   if (!validUuid(req.params.id)) return sendResponse(res, 400, false, 'Invalid split id');
   try {
     const split = await updateOwnedSplit({ id: req.params.id, ownerId: req.user.id, data: req.body || {} });
-    return split ? sendResponse(res, 200, true, 'Split updated successfully', { split }) : sendResponse(res, 404, false, 'Split not found');
+    if (!split) return sendResponse(res, 404, false, 'Split not found');
+    broadcastSplitEvent(split.id, 'split:updated', { splitId: split.id });
+    return sendResponse(res, 200, true, 'Split updated successfully', { split });
+  } catch (error) { return fail(res, error); }
+};
+
+export const updateContributions = async (req, res) => {
+  if (!validUuid(req.params.id)) return sendResponse(res, 400, false, 'Invalid split id');
+  try {
+    const result = await updateSplitContributions({
+      id: req.params.id,
+      ownerId: req.user.id,
+      contributions: req.body?.contributions || [],
+    });
+    if (result.status === 'not-found') return sendResponse(res, 404, false, 'Split not found');
+    broadcastSplitEvent(req.params.id, 'contribution:updated', { splitId: req.params.id });
+    broadcastSplitEvent(req.params.id, 'settlement:updated', { splitId: req.params.id });
+    return sendResponse(res, 200, true, 'Contributions updated successfully', { split: result.split });
   } catch (error) { return fail(res, error); }
 };
 
@@ -72,6 +91,7 @@ export const updateParticipantPayment = async (req, res) => {
     if (result.status === 'not-found') return sendResponse(res, 404, false, 'Split not found');
     if (result.status === 'bad-index') return sendResponse(res, 400, false, 'Invalid participant index');
     if (result.status === 'forbidden') return sendResponse(res, 403, false, 'You can only update your own payment');
+    broadcastSplitEvent(req.params.id, 'settlement:updated', { splitId: req.params.id });
     return sendResponse(res, 200, true, 'Participant payment updated', { split: result.split });
   } catch (error) { return fail(res, error); }
 };
@@ -81,7 +101,7 @@ export const ensureSplitHasGroupMembers = async (req, res) => {
   try {
     const split = await updateOwnedSplit({ id: req.params.id, ownerId: req.user.id, data: { ensureMembers: true } });
     if (!split) return sendResponse(res, 404, false, 'Split not found');
-    try { getIO().emit('split-updated', { splitId: split.id }); } catch { /* non-critical */ }
+    broadcastSplitEvent(split.id, 'split:updated', { splitId: split.id });
     return sendResponse(res, 200, true, 'Split updated with group members', { split });
   } catch (error) { return fail(res, error); }
 };
@@ -91,6 +111,7 @@ export const finalizeSplit = async (req, res) => {
   try {
     const result = await finalizeOwnedSplit(req.params.id, req.user.id);
     if (result.status === 'not-found') return sendResponse(res, 404, false, 'Split not found');
+    broadcastSplitEvent(req.params.id, 'session:completed', { splitId: req.params.id });
     return sendResponse(res, 200, true, result.status === 'already' ? 'Split already finalized' : 'Split finalized successfully', { split: result.split });
   } catch (error) { return fail(res, error); }
 };

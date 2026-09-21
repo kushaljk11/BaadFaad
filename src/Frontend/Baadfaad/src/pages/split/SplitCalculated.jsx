@@ -26,10 +26,12 @@ import {
   FaTimesCircle,
   FaClock,
   FaBolt,
+  FaArrowRight,
 } from "react-icons/fa";
 import esewaLogo from "@root-assets/esewa.png";
 import khaltiLogo from "@root-assets/khalti.png";
 import api from "../../config/config";
+import socket from "../../config/socket";
 import toast from "react-hot-toast";
 import useSessionSocket from "../../hooks/useSessionSocket";
 import { useAuth } from "../../context/authState";
@@ -108,6 +110,27 @@ export default function SplitCalculated() {
   );
   useSessionSocket(sessionId, null, onHostNavigate, null);
 
+  // Listen for real-time split, contribution, settlement updates
+  const roomId = sessionId || split?.sessionId || split?.groupId;
+  useEffect(() => {
+    if (!roomId) return;
+    const handler = (data) => {
+      if (!data?.splitId || String(data.splitId) === String(splitId)) {
+        fetchSplit();
+      }
+    };
+    socket.on("split:updated", handler);
+    socket.on("contribution:updated", handler);
+    socket.on("settlement:updated", handler);
+    socket.on("session:completed", handler);
+    return () => {
+      socket.off("split:updated", handler);
+      socket.off("contribution:updated", handler);
+      socket.off("settlement:updated", handler);
+      socket.off("session:completed", handler);
+    };
+  }, [roomId, splitId, fetchSplit]);
+
   // ── Table Timer: track elapsed time from lobby start ──
   useEffect(() => {
     const startStr = sessionId && localStorage.getItem(`timer_start_${sessionId}`);
@@ -137,38 +160,72 @@ export default function SplitCalculated() {
     return "Worth the wait — no friendships harmed!";
   };
 
+  const normalizeId = (v) => {
+    if (!v) return "";
+    if (typeof v === "string") return v;
+    if (typeof v === "object") return String(v._id || v.id || "");
+    return String(v);
+  };
+  const currentUserId = normalizeId(user?._id || user?.id);
+
   // Derived from API data
   const totalAmount = split?.totalAmount || 0;
   const breakdown = split?.breakdown || [];
+  const settlements = split?.settlement || [];
 
-  // Find the "big spender" — participant who paid the most
+  // Find my participant entry
+  const myEntry = breakdown.find((b) => {
+    const pId = normalizeId(b.participantId);
+    const uId = normalizeId(b.user);
+    const rawId = normalizeId(b._id || b.id);
+    return (
+      (currentUserId && (pId === currentUserId || uId === currentUserId || rawId === currentUserId)) ||
+      (user?.name && b.name && b.name.toLowerCase() === user.name.toLowerCase())
+    );
+  });
+
+  const myShare = myEntry ? (cleanRoundMode ? Math.round(myEntry.amount / 10) * 10 : myEntry.amount) : 0;
+  const myPaid = myEntry ? (myEntry.amountPaid || myEntry.paidAmount || 0) : 0;
+  const myNet = myEntry ? (myEntry.netBalance !== undefined ? myEntry.netBalance : (myPaid - myShare)) : 0;
+  const myDue = myNet < 0 ? Math.abs(myNet) : 0;
+  const myReceivable = myNet > 0 ? myNet : 0;
+  const isSettled = myNet === 0;
+
+  // Find the "big spender" / highest contributor
   const bigSpender = breakdown.length
-    ? breakdown.reduce((max, b) => ((b.amountPaid || 0) > (max.amountPaid || 0) ? b : max), breakdown[0])
+    ? breakdown.reduce((max, b) => {
+        const paidB = b.amountPaid || b.paidAmount || 0;
+        const paidMax = max.amountPaid || max.paidAmount || 0;
+        return paidB > paidMax ? b : max;
+      }, breakdown[0])
     : null;
-  const bigSpenderName = bigSpender
+  const bigSpenderPaid = bigSpender ? (bigSpender.amountPaid || bigSpender.paidAmount || 0) : 0;
+  const bigSpenderName = bigSpenderPaid > 0
     ? bigSpender.name || bigSpender.user?.name || bigSpender.participant?.name || "Someone"
     : null;
 
   // Build participant list with real backend data
   const participants = breakdown.map((b) => {
     const name = b.name || b.user?.name || b.participant?.name || "Participant";
-    const amountPaid = b.amountPaid || 0;
+    const amountPaid = b.amountPaid || b.paidAmount || 0;
     const share = cleanRoundMode ? Math.round(b.amount / 10) * 10 : b.amount;
-    const balanceDue = Math.max(0, share - amountPaid);
-    const paymentStatus = b.paymentStatus || "unpaid";
+    const netBalance = b.netBalance !== undefined ? b.netBalance : (amountPaid - share);
+    const balanceDue = netBalance < 0 ? Math.abs(netBalance) : 0;
+    const paymentStatus = b.paymentStatus || (netBalance >= 0 ? "paid" : "unpaid");
     const initials = name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
     return {
       name,
       initials,
       share,
       amountPaid,
+      netBalance,
       balanceDue,
       paymentStatus,
     };
   });
 
   // Count settled vs pending
-  const settledCount = participants.filter((p) => p.paymentStatus === "paid").length;
+  const settledCount = participants.filter((p) => p.paymentStatus === "paid" || p.balanceDue === 0).length;
   const pendingCount = participants.length - settledCount;
 
   const handleToggleTag = (tag) => {
@@ -213,13 +270,19 @@ export default function SplitCalculated() {
   };
 
   const handleProceedToPay = () => {
-    if (!totalAmount) {
-      toast.error("No payable amount found");
+    if (myNet >= 0) {
+      toast.success(myNet === 0 ? "You are all settled up! Nothing to pay." : `You should receive ${formatNPR(myReceivable)}, no payment required.`);
+      return;
+    }
+
+    const payable = myDue;
+    if (!payable || payable <= 0) {
+      toast.error("No payable balance due found");
       return;
     }
 
     const params = new URLSearchParams({
-      amount: String(totalAmount),
+      amount: String(payable),
       gateway: selectedPayment,
       splitId: splitId || "",
       sessionId: sessionId || "",
@@ -404,6 +467,57 @@ export default function SplitCalculated() {
             </div>
           </div>
 
+          {/* Your Summary Card */}
+          <div className="mb-6 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm md:rounded-3xl md:p-6">
+            <h2 className="text-base font-semibold text-slate-900 md:text-lg mb-3 flex items-center gap-2">
+              <FaCalculator className="text-emerald-600" />
+              Your Summary
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
+              <div className="rounded-xl bg-zinc-50 p-3.5 border border-zinc-100">
+                <p className="text-xs text-slate-500 font-medium">Your Share</p>
+                <p className="mt-1 text-base font-bold text-slate-900">{formatNPR(myShare)}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">What you consumed/owe</p>
+              </div>
+              <div className="rounded-xl bg-zinc-50 p-3.5 border border-zinc-100">
+                <p className="text-xs text-slate-500 font-medium">You Paid</p>
+                <p className="mt-1 text-base font-bold text-emerald-600">{formatNPR(myPaid)}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">Contributed to merchant</p>
+              </div>
+              <div
+                className={`rounded-xl p-3.5 border ${
+                  myNet > 0
+                    ? "bg-emerald-50/80 border-emerald-200"
+                    : myNet < 0
+                    ? "bg-rose-50/80 border-rose-200"
+                    : "bg-zinc-50 border-zinc-100"
+                }`}
+              >
+                <p className="text-xs font-semibold text-slate-600">
+                  {myNet > 0 ? "You Receive" : myNet < 0 ? "You Still Owe" : "Net Balance"}
+                </p>
+                <p
+                  className={`mt-1 text-base font-bold ${
+                    myNet > 0
+                      ? "text-emerald-700"
+                      : myNet < 0
+                      ? "text-rose-600"
+                      : "text-slate-700"
+                  }`}
+                >
+                  {myNet > 0
+                    ? `+${formatNPR(myReceivable)}`
+                    : myNet < 0
+                    ? `-${formatNPR(myDue)}`
+                    : "Settled (Rs. 0)"}
+                </p>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  {myNet > 0 ? "From group members" : myNet < 0 ? "To group members" : "Fully balanced"}
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Payment Methods */}
           <div className="mb-6 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm md:rounded-3xl md:p-6">
             <div className="mb-4 flex items-center justify-between">
@@ -411,9 +525,16 @@ export default function SplitCalculated() {
                 <FaReceipt className="text-slate-400" />
                 <h2 className="text-base font-semibold text-slate-900 md:text-lg">Payment Methods</h2>
               </div>
-              <p className="text-xs font-semibold text-emerald-600 md:text-sm">
-                Payable Amount: {formatNPR(totalAmount)}
-              </p>
+              <div className="text-right">
+                <p className="text-xs text-slate-400">Your Payable Due</p>
+                <p
+                  className={`text-sm font-bold ${
+                    myDue > 0 ? "text-rose-600" : "text-emerald-600"
+                  }`}
+                >
+                  {myDue > 0 ? formatNPR(myDue) : "Rs. 0 (Clear)"}
+                </p>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <button
@@ -445,13 +566,105 @@ export default function SplitCalculated() {
                 <p className="text-sm font-semibold text-slate-900">Khalti</p>
               </button>
             </div>
-            <button
-              type="button"
-              onClick={handleProceedToPay}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 md:px-8 md:py-4 md:text-base"
-            >
-              ⚡ PROCEED TO PAY
-            </button>
+            {myDue > 0 ? (
+              <button
+                type="button"
+                onClick={handleProceedToPay}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 md:px-8 md:py-4 md:text-base cursor-pointer"
+              >
+                ⚡ PROCEED TO PAY {formatNPR(myDue)}
+              </button>
+            ) : myNet > 0 ? (
+              <div className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-emerald-50 border border-emerald-200 px-6 py-3 text-sm font-semibold text-emerald-800">
+                <FaCheckCircle className="text-emerald-600" />
+                You are owed {formatNPR(myReceivable)} — no payment needed from you!
+              </div>
+            ) : (
+              <div className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-zinc-100 border border-zinc-200 px-6 py-3 text-sm font-semibold text-slate-600">
+                <FaCheckCircle className="text-emerald-600" />
+                You are all settled up!
+              </div>
+            )}
+          </div>
+
+          {/* Directed Settlements ("Who Pays Whom") */}
+          <div className="mb-6 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm md:rounded-3xl md:p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FaReceipt className="text-slate-400" />
+                <h2 className="text-base font-semibold text-slate-900 md:text-lg">
+                  Settlements: Who Pays Whom
+                </h2>
+              </div>
+              <span className="text-xs font-semibold text-slate-500">
+                {settlements.length} transfer{settlements.length === 1 ? "" : "s"}
+              </span>
+            </div>
+
+            {settlements.length === 0 ? (
+              <div className="rounded-xl bg-zinc-50 border border-zinc-100 py-6 text-center text-sm text-slate-500">
+                🎉 Everyone has contributed exactly their share! No transfers needed.
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {settlements.map((s, idx) => {
+                  const isUserPayer =
+                    currentUserId &&
+                    (normalizeId(s.fromParticipantId) === currentUserId ||
+                      (user?.name && s.fromName?.toLowerCase() === user.name.toLowerCase()));
+                  const isUserReceiver =
+                    currentUserId &&
+                    (normalizeId(s.toParticipantId) === currentUserId ||
+                      (user?.name && s.toName?.toLowerCase() === user.name.toLowerCase()));
+
+                  return (
+                    <div
+                      key={idx}
+                      className={`flex items-center justify-between rounded-xl border p-3.5 transition ${
+                        isUserPayer
+                          ? "bg-rose-50/70 border-rose-200"
+                          : isUserReceiver
+                          ? "bg-emerald-50/70 border-emerald-200"
+                          : "bg-zinc-50 border-zinc-200"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm text-slate-900">
+                          {isUserPayer ? "You" : s.fromName}
+                        </span>
+                        <span className="text-xs text-slate-400">pays</span>
+                        <span className="font-semibold text-sm text-slate-900">
+                          {isUserReceiver ? "You" : s.toName}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`text-sm font-bold ${
+                            isUserPayer
+                              ? "text-rose-600"
+                              : isUserReceiver
+                              ? "text-emerald-700"
+                              : "text-slate-900"
+                          }`}
+                        >
+                          {formatNPR(s.amount)}
+                        </span>
+                        {isUserPayer && (
+                          <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                            You Owe
+                          </span>
+                        )}
+                        {isUserReceiver && (
+                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                            Owes You
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Settlement Breakdown */}
@@ -460,7 +673,7 @@ export default function SplitCalculated() {
               <div className="flex items-center gap-2">
                 <FaReceipt className="text-slate-400" />
                 <h2 className="text-base font-semibold text-slate-900 md:text-lg">
-                  Settlement Breakdown
+                  Participants Breakdown
                 </h2>
               </div>
               <div className="flex items-center gap-3">
@@ -489,20 +702,27 @@ export default function SplitCalculated() {
                         {p.name}
                       </p>
                       <p className="text-xs text-slate-500">
-                        Share: {formatNPR(p.share)}
+                        Share: {formatNPR(p.share)} &bull; Paid: {formatNPR(p.amountPaid)}
                       </p>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1 md:flex-row md:items-center md:gap-3">
                     <div className="text-right">
-                      <p className="text-xs text-slate-500">
-                        Paid: <span className="font-semibold text-emerald-600">{formatNPR(p.amountPaid)}</span>
+                      <p
+                        className={`text-xs font-bold ${
+                          p.netBalance > 0
+                            ? "text-emerald-600"
+                            : p.netBalance < 0
+                            ? "text-rose-600"
+                            : "text-slate-500"
+                        }`}
+                      >
+                        {p.netBalance > 0
+                          ? `+${formatNPR(p.netBalance)} (Receives)`
+                          : p.netBalance < 0
+                          ? `-${formatNPR(p.balanceDue)} (Owes)`
+                          : "Settled"}
                       </p>
-                      {p.balanceDue > 0 && (
-                        <p className="text-xs text-red-500 font-semibold">
-                          Due: {formatNPR(p.balanceDue)}
-                        </p>
-                      )}
                     </div>
                     <StatusBadge status={p.paymentStatus} />
                   </div>

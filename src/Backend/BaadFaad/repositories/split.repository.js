@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { getPrisma } from '../config/prisma.js';
 import { allocateEvenly, fromPaisa, toPaisa } from '../utils/money.js';
 import { calculateSplitRows } from '../utils/splitEngine.js';
+import { calculateSettlement } from '../utils/settlementEngine.js';
+import { validateAndAllocateContributions } from '../utils/contributionEngine.js';
 import { toReceiptDto } from './receipt.repository.js';
 
 const includeSplit = {
@@ -30,11 +32,50 @@ const identityId = (row) => row.userId || row.participantId || row.id;
 export function toSplitDto(split) {
   if (!split) return null;
   const legacy = Array.isArray(split.breakdown) ? split.breakdown : [];
+  const totalPaisa = split.totalPaisa ?? toPaisa(split.totalAmount);
+
+  // Compute contributions and backward-compatibility fallback
+  const anyContributions = split.relationalParticipants.some((r) => r.paidAmountPaisa > 0n);
+  const settlementInputs = split.relationalParticipants.map((row) => {
+    let contributionPaisa = row.paidAmountPaisa || 0n;
+    if (!anyContributions && totalPaisa > 0n) {
+      if (row.userId === split.createdBy || (!row.userId && row.sortOrder === 0)) {
+        contributionPaisa = totalPaisa;
+      }
+    }
+    return {
+      id: row.id,
+      name: row.displayName || (row.user || row.participant)?.name || 'Participant',
+      shareAmountPaisa: row.amountPaisa,
+      paidAmountPaisa: contributionPaisa,
+    };
+  });
+
+  let settlementResult = { participants: [], transfers: [] };
+  try {
+    settlementResult = calculateSettlement(settlementInputs);
+  } catch (err) {
+    console.warn('Settlement calculation warning:', err?.message || err);
+  }
+
+  const settlementMap = new Map(settlementResult.participants.map((p) => [p.id, p]));
+
   const breakdown = split.relationalParticipants.map((row, index) => {
     const old = legacy.find((entry) => String(entry?._id || entry?.user || entry?.participant || '') === String(row.id || identityId(row))) || legacy[index] || {};
     const identity = row.user || row.participant;
     const paidPaisa = row.paymentAllocations.reduce((sum, allocation) => sum + allocation.amountPaisa, 0n);
     const payer = row.paymentAllocations.find((allocation) => allocation.payment.paidByUser)?.payment.paidByUser;
+
+    const settled = settlementMap.get(row.id);
+    const shareAmount = moneyNumber(row.amountPaisa);
+    const paidAmount = settled ? settled.paidAmount : moneyNumber(row.paidAmountPaisa || 0n);
+    const netBalance = settled ? settled.netBalance : (paidAmount - shareAmount);
+
+    let paymentStatus = row.status.toLowerCase();
+    if (netBalance === 0) paymentStatus = 'settled';
+    else if (netBalance > 0) paymentStatus = 'paid';
+    else if (paidPaisa > 0n) paymentStatus = 'partial';
+
     return {
       ...old,
       _id: row.id,
@@ -43,11 +84,14 @@ export function toSplitDto(split) {
       participant: row.participant ? { _id: row.participant.id, id: row.participant.id, name: row.participant.name, email: row.participant.email } : undefined,
       name: row.displayName || identity?.name || 'Participant',
       email: row.email || identity?.email || '',
-      amount: moneyNumber(row.amountPaisa),
-      amountPaid: moneyNumber(paidPaisa),
+      shareAmount,
+      paidAmount, // Contribution to the original merchant bill
+      netBalance, // paidAmount - shareAmount (+: receive, -: owe)
+      amount: shareAmount, // Backward compatibility for existing frontend consumption
+      amountPaid: moneyNumber(paidPaisa), // Gateway settlement payments received
       paidByName: payer?.name || old.paidByName || '',
       percentage: row.percentageBps == null ? old.percentage : row.percentageBps / 100,
-      paymentStatus: row.status.toLowerCase(),
+      paymentStatus,
       items: row.itemAssignments.length ? row.itemAssignments.map((assignment) => ({
         _id: assignment.receiptItemId,
         itemName: assignment.receiptItem.name,
@@ -61,7 +105,16 @@ export function toSplitDto(split) {
     _id: split.id, id: split.id, createdBy: split.createdBy, name: split.name,
     receiptId: split.receiptId, receipt: split.receipt ? toReceiptDto(split.receipt) : null,
     splitType: split.splitType, status: split.status, breakdown,
-    payments: split.payments, totalAmount: moneyNumber(split.totalPaisa ?? toPaisa(split.totalAmount)),
+    contributions: split.contributions && Array.isArray(split.contributions) && split.contributions.length
+      ? split.contributions
+      : settlementResult.participants.map((p) => ({
+          participantId: p.id,
+          name: p.name,
+          amount: p.paidAmount,
+          amountPaisa: p.paidAmountPaisa.toString(),
+        })),
+    settlement: settlementResult.transfers,
+    payments: split.payments, totalAmount: moneyNumber(totalPaisa),
     calculatedAt: split.calculatedAt, finalizedAt: split.finalizedAt, notes: split.notes,
     createdAt: split.createdAt, updatedAt: split.updatedAt,
   };
@@ -99,7 +152,7 @@ function legacyBreakdown(rows) {
   }));
 }
 
-export async function createSplitRecord({ createdBy, receiptId, splitType, participants, breakdown, name, totalAmount }) {
+export async function createSplitRecord({ createdBy, receiptId, splitType, participants, breakdown, name, totalAmount, contributions }) {
   const prisma = getPrisma();
   return prisma.$transaction(async (tx) => {
     let totalPaisa = toPaisa(totalAmount ?? 0);
@@ -114,18 +167,76 @@ export async function createSplitRecord({ createdBy, receiptId, splitType, parti
     const identities = await resolveIdentities(tx, input);
     const calculations = calculateSplitRows(splitType || 'equal', totalPaisa, identities.map((identity) => identity.entry));
     const allocated = identities.map((identity, index) => ({ ...identity, ...calculations[index] }));
-    const rows = allocated.map((row, sortOrder) => ({
-      id: randomUUID(), userId: row.user?.id || null, participantId: row.user ? null : row.participant?.id || null,
-      displayName: row.entry.name || row.user?.name || row.participant?.name || 'Participant',
-      email: row.entry.email || row.user?.email || row.participant?.email || null,
-      amountPaisa: row.amountPaisa, percentageBps: row.percentageBps, status: 'UNPAID', sortOrder, sourceItems: row.entry.items || [],
-    }));
+
+    // Allocate contributions: single payer (createdBy) by default, or validated custom contributions
+    let allocatedContributions = [];
+    if (contributions && Array.isArray(contributions) && contributions.length > 0) {
+      allocatedContributions = validateAndAllocateContributions(totalPaisa, contributions, { defaultPayerId: createdBy });
+    } else {
+      allocatedContributions = validateAndAllocateContributions(totalPaisa, [], { defaultPayerId: createdBy });
+    }
+
+    const contribMap = new Map();
+    for (const c of allocatedContributions) {
+      contribMap.set(String(c.participantId), c.amountPaisa);
+    }
+
+    let defaultPayerAssigned = false;
+    const rows = allocated.map((row, sortOrder) => {
+      const matchId = row.user?.id || row.participant?.id || row.entry?._id || row.entry?.id;
+      let paidPaisa = 0n;
+      if (matchId && contribMap.has(String(matchId))) {
+        paidPaisa = contribMap.get(String(matchId));
+      } else if (!defaultPayerAssigned && contribMap.has(String(createdBy)) && (row.user?.id === createdBy || sortOrder === 0)) {
+        paidPaisa = contribMap.get(String(createdBy));
+        defaultPayerAssigned = true;
+      }
+
+      return {
+        id: randomUUID(),
+        userId: row.user?.id || null,
+        participantId: row.user ? null : row.participant?.id || null,
+        displayName: row.entry.name || row.user?.name || row.participant?.name || 'Participant',
+        email: row.entry.email || row.user?.email || row.participant?.email || null,
+        amountPaisa: row.amountPaisa,
+        paidAmountPaisa: paidPaisa,
+        percentageBps: row.percentageBps,
+        status: 'UNPAID',
+        sortOrder,
+        sourceItems: row.entry.items || [],
+      };
+    });
+
     if ((splitType || 'equal') === 'item_based' && !receiptId) throw new TypeError('Item-based splits require a receipt');
     const databaseRows = rows.map(({ sourceItems: _sourceItems, ...row }) => row);
+
+    // Calculate settlement transfers
+    let settlementTransfers = [];
+    try {
+      const settlementInputs = rows.map((r) => ({
+        id: r.id,
+        name: r.displayName,
+        shareAmountPaisa: r.amountPaisa,
+        paidAmountPaisa: r.paidAmountPaisa,
+      }));
+      settlementTransfers = calculateSettlement(settlementInputs).transfers.map((t) => ({
+        ...t,
+        amountPaisa: t.amountPaisa.toString(),
+      }));
+    } catch (e) {
+      console.warn('Settlement calculation on create warning:', e?.message || e);
+    }
+
     const split = await tx.split.create({ data: {
       createdBy, name: String(name || '').slice(0, 100), receiptId: receiptId || null,
       splitType: splitType || 'equal', status: 'calculated', totalAmount: moneyNumber(totalPaisa), totalPaisa,
       calculatedAt: new Date(), breakdown: legacyBreakdown(rows),
+      contributions: allocatedContributions.map((c) => ({
+        participantId: c.participantId,
+        amount: c.amount,
+        amountPaisa: c.amountPaisa.toString(),
+      })),
+      settlement: settlementTransfers,
       relationalParticipants: { create: databaseRows },
     } });
     if ((splitType || 'equal') === 'item_based') {
@@ -259,6 +370,75 @@ export async function updateSplitParticipantStatus({ splitId, index, actorId, am
     await tx.split.update({ where: { id: splitId }, data: { breakdown: legacy } });
     return { status: 'updated' };
   }).then(async (result) => ({ ...result, split: result.status === 'updated' ? await findSplitForUser(splitId, actorId) : null }));
+}
+
+export async function updateSplitContributions({ id, ownerId, contributions }) {
+  const prisma = getPrisma();
+  return prisma.$transaction(async (tx) => {
+    const split = await tx.split.findFirst({
+      where: { id, createdBy: ownerId },
+      include: includeSplit,
+    });
+    if (!split) return { status: 'not-found' };
+
+    const totalPaisa = split.totalPaisa ?? toPaisa(split.totalAmount);
+    const allocatedContributions = validateAndAllocateContributions(totalPaisa, contributions, { defaultPayerId: ownerId });
+
+    const contribMap = new Map();
+    for (const c of allocatedContributions) {
+      contribMap.set(String(c.participantId), c.amountPaisa);
+    }
+
+    const participantsForSettlement = [];
+
+    for (const p of split.relationalParticipants) {
+      let paidPaisa = 0n;
+      if (p.userId && contribMap.has(String(p.userId))) {
+        paidPaisa = contribMap.get(String(p.userId));
+      } else if (p.participantId && contribMap.has(String(p.participantId))) {
+        paidPaisa = contribMap.get(String(p.participantId));
+      } else if (contribMap.has(String(p.id))) {
+        paidPaisa = contribMap.get(String(p.id));
+      }
+
+      await tx.splitParticipant.update({
+        where: { id: p.id },
+        data: { paidAmountPaisa: paidPaisa },
+      });
+
+      participantsForSettlement.push({
+        id: p.id,
+        name: p.displayName,
+        shareAmountPaisa: p.amountPaisa,
+        paidAmountPaisa: paidPaisa,
+      });
+    }
+
+    const settlementResult = calculateSettlement(participantsForSettlement);
+
+    await tx.split.update({
+      where: { id },
+      data: {
+        contributions: allocatedContributions.map((c) => ({
+          participantId: c.participantId,
+          amount: c.amount,
+          amountPaisa: c.amountPaisa.toString(),
+        })),
+        settlement: settlementResult.transfers.map((t) => ({
+          ...t,
+          amountPaisa: t.amountPaisa.toString(),
+        })),
+        version: { increment: 1 },
+      },
+    });
+
+    const updated = await tx.split.findUnique({
+      where: { id },
+      include: includeSplit,
+    });
+
+    return { status: 'updated', split: toSplitDto(updated) };
+  });
 }
 
 export async function finalizeOwnedSplit(id, ownerId) {

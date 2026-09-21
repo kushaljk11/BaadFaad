@@ -22,6 +22,7 @@ import {
   getAllSplits,
   getSplitById,
   updateSplit,
+  updateContributions,
   updateParticipantPayment,
   finalizeSplit,
   ensureSplitHasGroupMembers,
@@ -37,6 +38,7 @@ router.post('/', validate({ body: splitCreateBody }), createSplit);
 router.get('/', protect, validate({ query: paginationQuery }), getAllSplits);
 router.get('/:id', validate({ params: idParams }), getSplitById);
 router.put('/:id', validate({ params: idParams, body: splitUpdateBody }), updateSplit);
+router.put('/:id/contributions', protect, validate({ params: idParams }), updateContributions);
 router.put('/:id/participant/:participantIndex', validate({ params: participantIndexParams, body: participantPaymentBody }), updateParticipantPayment);
 router.post('/:id/ensure-members', validate({ params: idParams }), ensureSplitHasGroupMembers);
 router.post('/:id/finalize', protect, validate({ params: idParams }), finalizeSplit);
