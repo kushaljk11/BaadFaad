@@ -155,6 +155,13 @@ function legacyBreakdown(rows) {
 export async function createSplitRecord({ createdBy, receiptId, splitType, participants, breakdown, name, totalAmount, contributions }) {
   const prisma = getPrisma();
   return prisma.$transaction(async (tx) => {
+    const creator = await tx.user.findUnique({ where: { id: createdBy } });
+    if (!creator) {
+      const err = new TypeError('User account not found or session has expired. Please log in again.');
+      err.statusCode = 401;
+      throw err;
+    }
+
     let totalPaisa = toPaisa(totalAmount ?? 0);
     let receiptItems = [];
     if (receiptId) {

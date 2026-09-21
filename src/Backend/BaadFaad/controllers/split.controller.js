@@ -15,6 +15,9 @@ import { paginationFrom, paginationMeta } from '../utils/pagination.js';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const validUuid = (value) => UUID.test(String(value ?? ''));
 const fail = (res, error) => {
+  if (error?.statusCode === 401 || error?.code === 'P2003') {
+    return sendResponse(res, 401, false, error.message || 'User session has expired or user does not exist. Please log in again.');
+  }
   if (error instanceof TypeError || error instanceof RangeError) return sendResponse(res, 400, false, error.message);
   console.error('Split operation failed:', error);
   return sendResponse(res, 500, false, 'Split operation failed');
