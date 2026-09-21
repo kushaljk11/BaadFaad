@@ -29,27 +29,12 @@ export default function Nudge() {
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
   const currentUserId = storedUser?._id || storedUser?.id || "";
 
-  const highestPayerEntry = useMemo(() => {
-    const rows = splitData?.breakdown || [];
-    if (!rows.length) return null;
-    return rows
-      .slice()
-      .sort((a, b) => Number(b?.amountPaid || 0) - Number(a?.amountPaid || 0))[0] || null;
-  }, [splitData]);
-
-  const highestPayerId =
-    highestPayerEntry?.user?._id ||
-    highestPayerEntry?.user ||
-    highestPayerEntry?.participant?._id ||
-    highestPayerEntry?.participant ||
-    highestPayerEntry?._id ||
-    "";
-
-  const highestPayerPaid = Number(highestPayerEntry?.amountPaid || 0);
-  const hostId = String(group?.createdBy?._id || group?.createdBy || "");
-  const effectiveNudgerId = highestPayerPaid > 0 ? String(highestPayerId || "") : hostId;
-
-  const canCurrentUserNudge = !!effectiveNudgerId && String(currentUserId) === String(effectiveNudgerId);
+  const isHost = String(group?.createdBy?._id || group?.createdBy || "") === String(currentUserId);
+  const myParticipant = (splitData?.breakdown || []).find(
+    (b) => String(b.user?._id || b.user?.id || b.user || b._id || "") === String(currentUserId)
+  );
+  const isCreditor = Number(myParticipant?.netBalance || 0) > 0;
+  const canCurrentUserNudge = isHost || isCreditor;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -81,22 +66,27 @@ export default function Nudge() {
                 b.participant?.email ||
                 memberEmailById.get(participantId) ||
                 "";
-              const share = b.amount || 0;
-              const paid = b.amountPaid || 0;
-              const due = Math.max(0, share - paid);
-              const isPaid = b.paymentStatus === "paid";
-              const isSettled = isPaid || due <= 0;
-              const canNudge = !isSettled && Boolean(String(email).trim());
+              const share = b.expenseShare ?? b.shareAmount ?? b.amount ?? 0;
+              const merchantPaid = b.merchantContribution ?? b.paidAmount ?? 0;
+              const netBalance = b.netBalance !== undefined ? b.netBalance : (merchantPaid - share);
+              const isDebtor = netBalance < 0;
+              const due = isDebtor
+                ? (b.reimbursementRemaining !== undefined ? b.reimbursementRemaining : Math.abs(netBalance))
+                : 0;
+              const isSettled = !isDebtor || due <= 0 || b.paymentStatus === "paid";
+              const canNudge = canCurrentUserNudge && !isSettled && Boolean(String(email).trim());
               return {
                 _id: b.participant || b.user?._id || b._id,
                 splitParticipantId: b._id,
                 name,
                 email,
                 share,
-                paid,
+                paid: merchantPaid,
+                reimbursementPaid: b.reimbursementPaid || 0,
                 due,
+                netBalance,
                 paidByName: b.paidByName || '',
-                status: isSettled ? "Fully Settled" : "Pending Payment",
+                status: isSettled ? (netBalance > 0 ? "Creditor (To Receive)" : "Fully Settled") : "Pending Reimbursement",
                 amount: formatNPR(due),
                 pending: !isSettled,
                 action: isSettled ? "Settled" : canNudge ? "Anonymous Nudge" : "No Email",

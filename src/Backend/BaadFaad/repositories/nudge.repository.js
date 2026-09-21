@@ -1,5 +1,7 @@
 import { getPrisma } from '../config/prisma.js';
 import { fromPaisa, toPaisa } from '../utils/money.js';
+import { calculateSettlement, enrichSettlementWithPayments } from '../utils/settlementEngine.js';
+import { toSplitDto } from './split.repository.js';
 
 const moneyNumber = (paisa) => Number(fromPaisa(paisa));
 const toDto = (row) =>
@@ -14,23 +16,64 @@ async function splitContext(tx, splitParticipantId, senderId) {
   const target = await tx.splitParticipant.findUnique({
     where: { id: splitParticipantId },
     include: {
-      user: true, participant: true,
-      split: { include: { relationalParticipants: { include: { paymentAllocations: { where: { payment: { status: 'VERIFIED' } } } } } } },
+      user: true,
+      participant: true,
+      split: {
+        include: {
+          relationalParticipants: {
+            include: {
+              user: true,
+              participant: true,
+              paymentAllocations: { where: { payment: { status: 'VERIFIED' } } },
+            },
+          },
+          settlementPayments: true,
+        },
+      },
     },
   });
   if (!target) return { status: 'not-found' };
-  const paidByParticipant = new Map(target.split.relationalParticipants.map((row) => [
-    row.id, row.paymentAllocations.reduce((sum, allocation) => sum + allocation.amountPaisa, 0n),
-  ]));
-  const highestPaid = [...paidByParticipant.values()].reduce((max, value) => value > max ? value : max, 0n);
-  const senderRow = target.split.relationalParticipants.find((row) => row.userId === senderId);
-  const authorized = target.split.createdBy === senderId || (highestPaid > 0n && senderRow && paidByParticipant.get(senderRow.id) === highestPaid);
-  if (!authorized) return { status: 'forbidden' };
-  const gatewayPaid = paidByParticipant.get(target.id) || 0n;
-  const directPaid = target.paidAmountPaisa || 0n;
-  const totalPaid = gatewayPaid > directPaid ? gatewayPaid : directPaid;
-  const duePaisa = target.amountPaisa > totalPaid ? target.amountPaisa - totalPaid : 0n;
-  if (duePaisa === 0n) return { status: 'settled' };
+
+  // Calculate baseline directed obligations from merchant contributions and expense shares
+  const totalPaisa = target.split.totalPaisa ?? toPaisa(target.split.totalAmount);
+  const anyContributions = target.split.relationalParticipants.some((r) => r.paidAmountPaisa > 0n);
+  const settlementInputs = target.split.relationalParticipants.map((row) => {
+    let contributionPaisa = row.paidAmountPaisa || 0n;
+    if (!anyContributions && totalPaisa > 0n) {
+      if (row.userId === target.split.createdBy || (!row.userId && row.sortOrder === 0)) {
+        contributionPaisa = totalPaisa;
+      }
+    }
+    return {
+      id: row.id,
+      name: row.displayName || (row.user || row.participant)?.name || 'Participant',
+      shareAmountPaisa: row.amountPaisa,
+      paidAmountPaisa: contributionPaisa,
+    };
+  });
+
+  const settlementResult = calculateSettlement(settlementInputs);
+  const enriched = enrichSettlementWithPayments(settlementResult.transfers, target.split.settlementPayments || []);
+
+  // Filter transfers where target is the debtor and has unpaid balance
+  const targetDebts = enriched.transfers.filter(
+    (t) => String(t.fromParticipantId) === String(target.id) && t.remainingAmountPaisa > 0n
+  );
+
+  const duePaisa = targetDebts.reduce((sum, t) => sum + BigInt(t.remainingAmountPaisa), 0n);
+  if (duePaisa <= 0n) return { status: 'settled' };
+
+  // Permission check: sender must be the split host OR a creditor of target's remaining debt
+  const isHost = target.split.createdBy === senderId;
+  const isCreditor = targetDebts.some((t) => {
+    const creditorRow = target.split.relationalParticipants.find(
+      (p) => String(p.id) === String(t.toParticipantId)
+    );
+    return creditorRow?.userId === senderId;
+  });
+
+  if (!isHost && !isCreditor) return { status: 'forbidden' };
+
   const group = await tx.group.findFirst({ where: { splitId: target.splitId }, select: { name: true, id: true } });
   const sender = await tx.user.findUnique({ where: { id: senderId }, select: { name: true, email: true } });
   return { status: 'ok', target, sender, group, duePaisa };
@@ -85,15 +128,42 @@ export async function listOwnedNudges(senderId, options = {}) {
 export async function getOwnedSplitSummary(splitId, senderId) {
   const split = await getPrisma().split.findFirst({
     where: { id: splitId, createdBy: senderId },
-    include: { relationalParticipants: { include: { user: true, participant: true, paymentAllocations: { where: { payment: { status: 'VERIFIED' } } } }, orderBy: { sortOrder: 'asc' } } },
+    include: {
+      relationalParticipants: {
+        include: {
+          user: true,
+          participant: true,
+          itemAssignments: { include: { receiptItem: true } },
+          paymentAllocations: {
+            where: { payment: { status: 'VERIFIED' } },
+            include: { payment: { include: { paidByUser: true } } },
+          },
+        },
+        orderBy: { sortOrder: 'asc' },
+      },
+      relationalPayments: {
+        include: { paidByUser: true, allocations: true },
+      },
+      settlementPayments: {
+        include: {
+          fromParticipant: true,
+          toParticipant: true,
+          recordedByUser: { select: { id: true, name: true, email: true } },
+        },
+      },
+    },
   });
   if (!split) return null;
+  const dto = toSplitDto(split);
   return {
-    groupName: split.name || 'Split', totalAmount: moneyNumber(split.totalPaisa ?? toPaisa(split.totalAmount)),
-    breakdown: split.relationalParticipants.map((row) => {
-      const paid = row.paymentAllocations.reduce((sum, item) => sum + item.amountPaisa, 0n);
-      const identity = row.user || row.participant;
-      return { name: row.displayName, email: row.email || identity?.email || '', share: moneyNumber(row.amountPaisa), amountPaid: moneyNumber(paid), balanceDue: moneyNumber(row.amountPaisa > paid ? row.amountPaisa - paid : 0n) };
-    }),
+    groupName: split.name || 'Split',
+    totalAmount: dto.totalAmount,
+    breakdown: dto.breakdown.map((row) => ({
+      name: row.name,
+      email: row.email,
+      share: row.shareAmount,
+      amountPaid: row.paidAmount,
+      balanceDue: row.reimbursementRemaining,
+    })),
   };
 }

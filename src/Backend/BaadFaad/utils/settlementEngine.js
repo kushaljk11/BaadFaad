@@ -199,3 +199,114 @@ export function calculateSettlement(participants = []) {
     totalCreditPaisa,
   };
 }
+
+/**
+ * Enriches directed settlement obligations with actual repayment ledger records.
+ *
+ * @param {Array<{
+ *   fromParticipantId: string,
+ *   fromName: string,
+ *   toParticipantId: string,
+ *   toName: string,
+ *   amount: number,
+ *   amountPaisa: bigint|string
+ * }>} transfers
+ * @param {Array<{
+ *   id?: string,
+ *   fromParticipantId: string,
+ *   toParticipantId: string,
+ *   amountPaisa: bigint|string,
+ *   method?: string,
+ *   note?: string,
+ *   recordedByUser?: { name: string },
+ *   recordedByName?: string,
+ *   createdAt?: Date|string
+ * }>} payments
+ * @returns {{
+ *   transfers: Array<{
+ *     id: string,
+ *     fromParticipantId: string,
+ *     fromName: string,
+ *     toParticipantId: string,
+ *     toName: string,
+ *     dueAmount: number,
+ *     dueAmountPaisa: string,
+ *     paidAmount: number,
+ *     paidAmountPaisa: string,
+ *     remainingAmount: number,
+ *     remainingAmountPaisa: string,
+ *     status: 'UNPAID' | 'PARTIAL' | 'PAID',
+ *     payments: Array<any>
+ *   }>,
+ *   isFullySettled: boolean,
+ *   totalDue: number,
+ *   totalDuePaisa: string,
+ *   totalPaid: number,
+ *   totalPaidPaisa: string,
+ *   totalRemaining: number,
+ *   totalRemainingPaisa: string
+ * }}
+ */
+export function enrichSettlementWithPayments(transfers = [], payments = []) {
+  let totalDuePaisa = 0n;
+  let totalPaidPaisa = 0n;
+
+  const enrichedTransfers = transfers.map((t) => {
+    const duePaisa = BigInt(t.amountPaisa);
+    totalDuePaisa += duePaisa;
+
+    const matchingPayments = (payments || []).filter(
+      (p) =>
+        String(p.fromParticipantId) === String(t.fromParticipantId) &&
+        String(p.toParticipantId) === String(t.toParticipantId)
+    );
+
+    const paidPaisa = matchingPayments.reduce((sum, p) => sum + BigInt(p.amountPaisa), 0n);
+    totalPaidPaisa += (paidPaisa > duePaisa ? duePaisa : paidPaisa);
+
+    const remainingPaisa = duePaisa > paidPaisa ? duePaisa - paidPaisa : 0n;
+    const status = paidPaisa <= 0n ? 'UNPAID' : remainingPaisa <= 0n ? 'PAID' : 'PARTIAL';
+
+    return {
+      id: `${t.fromParticipantId}_${t.toParticipantId}`,
+      fromParticipantId: t.fromParticipantId,
+      fromName: t.fromName,
+      toParticipantId: t.toParticipantId,
+      toName: t.toName,
+      amount: Number(fromPaisa(duePaisa)),
+      amountPaisa: duePaisa.toString(),
+      dueAmount: Number(fromPaisa(duePaisa)),
+      dueAmountPaisa: duePaisa.toString(),
+      paidAmount: Number(fromPaisa(paidPaisa)),
+      paidAmountPaisa: paidPaisa.toString(),
+      remainingAmount: Number(fromPaisa(remainingPaisa)),
+      remainingAmountPaisa: remainingPaisa.toString(),
+      status,
+      payments: matchingPayments.map((p) => ({
+        id: p.id,
+        amount: Number(fromPaisa(BigInt(p.amountPaisa))),
+        amountPaisa: p.amountPaisa.toString(),
+        method: p.method || 'CASH',
+        note: p.note || '',
+        recordedByName: p.recordedByUser?.name || p.recordedByName || 'Host',
+        createdAt: p.createdAt || new Date(),
+      })),
+    };
+  });
+
+  const totalRemainingPaisa = totalDuePaisa > totalPaidPaisa ? totalDuePaisa - totalPaidPaisa : 0n;
+  const isFullySettled =
+    enrichedTransfers.length === 0 ||
+    enrichedTransfers.every((t) => t.status === 'PAID');
+
+  return {
+    transfers: enrichedTransfers,
+    isFullySettled,
+    totalDue: Number(fromPaisa(totalDuePaisa)),
+    totalDuePaisa: totalDuePaisa.toString(),
+    totalPaid: Number(fromPaisa(totalPaidPaisa)),
+    totalPaidPaisa: totalPaidPaisa.toString(),
+    totalRemaining: Number(fromPaisa(totalRemainingPaisa)),
+    totalRemainingPaisa: totalRemainingPaisa.toString(),
+  };
+}

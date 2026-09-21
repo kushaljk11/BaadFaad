@@ -69,6 +69,29 @@ export async function completeGatewayTransaction({ productId, userId, paidAmount
       });
       const paid = aggregate._sum.amountPaisa ?? 0n;
       await tx.splitParticipant.update({ where: { id: participant.id }, data: { status: paid >= participant.amountPaisa ? 'PAID' : paid > 0n ? 'PARTIAL' : 'UNPAID' } });
+
+      // Also record in SettlementPayment ledger for reimbursement tracking
+      const splitWithParticipants = await tx.split.findUnique({
+        where: { id: transaction.splitId },
+        include: { relationalParticipants: true },
+      });
+      const creditor = splitWithParticipants?.relationalParticipants.find(
+        (p) => (p.paidAmountPaisa || 0n) > p.amountPaisa
+      ) || splitWithParticipants?.relationalParticipants.find((p) => p.userId === splitWithParticipants.createdBy);
+
+      if (creditor && creditor.id !== participant.id) {
+        await tx.settlementPayment.create({
+          data: {
+            splitId: transaction.splitId,
+            fromParticipantId: participant.id,
+            toParticipantId: creditor.id,
+            amountPaisa: paidAmountPaisa,
+            method: transaction.payment_gateway.toUpperCase(),
+            note: `gateway:${transaction.id}`,
+            recordedByUserId: userId,
+          },
+        });
+      }
     }
     return { status: 'completed', transaction: await tx.transaction.findUnique({ where: { id: transaction.id } }) };
   });

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { getPrisma } from '../config/prisma.js';
 import { allocateEvenly, fromPaisa, toPaisa } from '../utils/money.js';
 import { calculateSplitRows } from '../utils/splitEngine.js';
-import { calculateSettlement } from '../utils/settlementEngine.js';
+import { calculateSettlement, enrichSettlementWithPayments } from '../utils/settlementEngine.js';
 import { validateAndAllocateContributions } from '../utils/contributionEngine.js';
 import { toReceiptDto } from './receipt.repository.js';
 
@@ -23,6 +23,14 @@ const includeSplit = {
   relationalPayments: {
     include: { paidByUser: true, allocations: true },
     orderBy: { createdAt: 'asc' },
+  },
+  settlementPayments: {
+    include: {
+      fromParticipant: true,
+      toParticipant: true,
+      recordedByUser: { select: { id: true, name: true, email: true } },
+    },
+    orderBy: { createdAt: 'desc' },
   },
 };
 
@@ -58,6 +66,12 @@ export function toSplitDto(split) {
     console.warn('Settlement calculation warning:', err?.message || err);
   }
 
+  // Enrich directed settlement obligations with actual repayment ledger records
+  const enrichedSettlement = enrichSettlementWithPayments(
+    settlementResult.transfers,
+    split.settlementPayments || []
+  );
+
   const settlementMap = new Map(settlementResult.participants.map((p) => [p.id, p]));
 
   const breakdown = split.relationalParticipants.map((row, index) => {
@@ -71,10 +85,23 @@ export function toSplitDto(split) {
     const paidAmount = settled ? settled.paidAmount : moneyNumber(row.paidAmountPaisa || 0n);
     const netBalance = settled ? settled.netBalance : (paidAmount - shareAmount);
 
-    let paymentStatus = row.status.toLowerCase();
-    if (netBalance === 0) paymentStatus = 'settled';
-    else if (netBalance > 0) paymentStatus = 'paid';
-    else if (paidPaisa > 0n) paymentStatus = 'partial';
+    // Calculate participant repayment status based on directed settlement obligations
+    let paymentStatus = 'settled';
+    let myDueDebt = 0;
+    let myPaidDebt = 0;
+    let myRemainingDebt = 0;
+
+    if (netBalance < 0) {
+      const myDebts = enrichedSettlement.transfers.filter((t) => String(t.fromParticipantId) === String(row.id));
+      myDueDebt = myDebts.reduce((sum, t) => sum + t.dueAmount, 0);
+      myPaidDebt = myDebts.reduce((sum, t) => sum + t.paidAmount, 0);
+      myRemainingDebt = myDebts.reduce((sum, t) => sum + t.remainingAmount, 0);
+      paymentStatus = myPaidDebt <= 0 ? 'unpaid' : myRemainingDebt <= 0 ? 'paid' : 'partial';
+    } else if (netBalance > 0) {
+      paymentStatus = 'creditor';
+    } else {
+      paymentStatus = 'settled';
+    }
 
     return {
       ...old,
@@ -84,14 +111,20 @@ export function toSplitDto(split) {
       participant: row.participant ? { _id: row.participant.id, id: row.participant.id, name: row.participant.name, email: row.participant.email } : undefined,
       name: row.displayName || identity?.name || 'Participant',
       email: row.email || identity?.email || '',
-      shareAmount,
-      paidAmount, // Contribution to the original merchant bill
+      shareAmount, // Obligation (expense share)
+      paidAmount, // Original merchant contribution
+      expenseShare: shareAmount,
+      merchantContribution: paidAmount,
       netBalance, // paidAmount - shareAmount (+: receive, -: owe)
       amount: shareAmount, // Backward compatibility for existing frontend consumption
       amountPaid: moneyNumber(paidPaisa), // Gateway settlement payments received
       paidByName: payer?.name || old.paidByName || '',
       percentage: row.percentageBps == null ? old.percentage : row.percentageBps / 100,
-      paymentStatus,
+      paymentStatus, // 'unpaid' | 'partial' | 'paid' | 'creditor' | 'settled'
+      reimbursementDue: myDueDebt,
+      reimbursementPaid: myPaidDebt,
+      reimbursementRemaining: myRemainingDebt,
+      isSettled: paymentStatus === 'paid' || paymentStatus === 'settled',
       items: row.itemAssignments.length ? row.itemAssignments.map((assignment) => ({
         _id: assignment.receiptItemId,
         itemName: assignment.receiptItem.name,
@@ -101,6 +134,7 @@ export function toSplitDto(split) {
       })) : (old.items || []),
     };
   });
+
   return {
     _id: split.id, id: split.id, createdBy: split.createdBy, name: split.name,
     receiptId: split.receiptId, receipt: split.receipt ? toReceiptDto(split.receipt) : null,
@@ -113,9 +147,27 @@ export function toSplitDto(split) {
           amount: p.paidAmount,
           amountPaisa: p.paidAmountPaisa.toString(),
         })),
-    settlement: settlementResult.transfers.map((t) => ({
-      ...t,
-      amountPaisa: t.amountPaisa ? t.amountPaisa.toString() : '0',
+    settlement: enrichedSettlement.transfers,
+    isFullySettled: enrichedSettlement.isFullySettled,
+    summary: {
+      totalExpense: moneyNumber(totalPaisa),
+      totalToSettle: enrichedSettlement.totalDue,
+      totalReimbursed: enrichedSettlement.totalPaid,
+      totalRemaining: enrichedSettlement.totalRemaining,
+      isFullySettled: enrichedSettlement.isFullySettled,
+    },
+    settlementPayments: (split.settlementPayments || []).map((p) => ({
+      id: p.id,
+      fromParticipantId: p.fromParticipantId,
+      fromName: p.fromParticipant?.displayName || 'Debtor',
+      toParticipantId: p.toParticipantId,
+      toName: p.toParticipant?.displayName || 'Creditor',
+      amount: moneyNumber(p.amountPaisa),
+      amountPaisa: p.amountPaisa.toString(),
+      method: p.method,
+      note: p.note,
+      recordedByName: p.recordedByUser?.name || 'Host',
+      createdAt: p.createdAt,
     })),
     payments: split.payments, totalAmount: moneyNumber(totalPaisa),
     calculatedAt: split.calculatedAt, finalizedAt: split.finalizedAt, notes: split.notes,

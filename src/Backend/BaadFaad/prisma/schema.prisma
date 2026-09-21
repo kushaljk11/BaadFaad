@@ -22,8 +22,9 @@ model User {
   splitParticipants   SplitParticipant[]
   paymentsMade        Payment[]
   gatewayTransactions Transaction[]
-  sentNudges          Nudge[]
-  invitationsCreated  Invitation[]
+  sentNudges                  Nudge[]
+  invitationsCreated          Invitation[]
+  settlementPaymentsRecorded  SettlementPayment[]
 }
 
 model Participant {
@@ -92,6 +93,7 @@ model Split {
   relationalParticipants SplitParticipant[]
   relationalPayments     Payment[]
   gatewayTransactions    Transaction[]
+  settlementPayments     SettlementPayment[]
   receipt                Receipt?           @relation(fields: [receiptId], references: [id], onDelete: SetNull)
   sessions               Session[]
   groups                 Group[]
@@ -279,9 +281,11 @@ model SplitParticipant {
   split              Split                  @relation(fields: [splitId], references: [id], onDelete: Cascade)
   user               User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
   participant        Participant?           @relation(fields: [participantId], references: [id], onDelete: SetNull)
-  itemAssignments    SplitItemAssignment[]
-  paymentAllocations PaymentAllocation[]
-  nudges             Nudge[]
+  itemAssignments            SplitItemAssignment[]
+  paymentAllocations         PaymentAllocation[]
+  nudges                     Nudge[]
+  sentSettlementPayments     SettlementPayment[]    @relation("SentSettlementPayments")
+  receivedSettlementPayments SettlementPayment[]    @relation("ReceivedSettlementPayments")
 
   @@unique([splitId, userId])
   @@unique([splitId, participantId])
@@ -331,6 +335,26 @@ model PaymentAllocation {
 
   @@unique([paymentId, splitParticipantId])
   @@index([splitParticipantId])
+}
+
+model SettlementPayment {
+  id                String           @id @default(uuid()) @db.Uuid
+  splitId           String           @db.Uuid
+  fromParticipantId String           @db.Uuid
+  toParticipantId   String           @db.Uuid
+  amountPaisa       BigInt
+  method            String           @default("CASH")
+  note              String           @default("")
+  recordedByUserId  String?          @db.Uuid
+  createdAt         DateTime         @default(now())
+
+  split             Split            @relation(fields: [splitId], references: [id], onDelete: Cascade)
+  fromParticipant   SplitParticipant @relation("SentSettlementPayments", fields: [fromParticipantId], references: [id], onDelete: Cascade)
+  toParticipant     SplitParticipant @relation("ReceivedSettlementPayments", fields: [toParticipantId], references: [id], onDelete: Cascade)
+  recordedByUser    User?            @relation(fields: [recordedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([splitId, createdAt])
+  @@index([fromParticipantId, toParticipantId])
 }
 
 model Invitation {

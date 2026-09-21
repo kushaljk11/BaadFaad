@@ -47,9 +47,11 @@ test('session repository enforces split ownership, membership, host access, and 
     await prisma.invitation.updateMany({ where: { sessionId }, data: { revokedAt: new Date() } });
     assert.equal((await joinSessionAsUser({ sessionId, userId: outsiderId, inviteToken: invitation.token, requireInvitation: true })).status, 'invalid-invitation');
   } finally {
-    await prisma.session.deleteMany({ where: { id: sessionId } });
-    await prisma.split.deleteMany({ where: { id: splitId } });
-    await prisma.user.deleteMany({ where: { id: { in: [ownerId, memberId, outsiderId] } } });
+    await prisma.groupMember.deleteMany({ where: { userId: { in: [ownerId, memberId, outsiderId] } } }).catch(() => {});
+    await prisma.group.deleteMany({ where: { splitId } }).catch(() => {});
+    await prisma.session.deleteMany({ where: { id: sessionId } }).catch(() => {});
+    await prisma.split.deleteMany({ where: { id: splitId } }).catch(() => {});
+    await prisma.user.deleteMany({ where: { id: { in: [ownerId, memberId, outsiderId] } } }).catch(() => {});
     await prisma.$disconnect();
   }
 });
