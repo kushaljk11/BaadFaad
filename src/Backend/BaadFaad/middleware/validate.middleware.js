@@ -11,7 +11,15 @@ export function validate(schemas) {
           issues: result.error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message })),
         });
       }
-      req[key] = result.data;
+      if (key === 'query') {
+        req.validatedQuery = result.data;
+        if (req.query && typeof req.query === 'object') {
+          for (const prop of Object.keys(req.query)) delete req.query[prop];
+          Object.assign(req.query, result.data);
+        }
+      } else {
+        req[key] = result.data;
+      }
     }
     return next();
   };
