@@ -720,7 +720,7 @@ export default function SplitBreakdown() {
                             />
                           ) : (
                             <p className="text-xs font-semibold text-slate-800">
-                              {formatNPR(amountPaid)}
+                              {formatNPR(actualPaid)}
                             </p>
                           )}
                         </div>

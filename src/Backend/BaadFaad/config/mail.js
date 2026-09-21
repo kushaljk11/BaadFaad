@@ -1,24 +1,30 @@
 /**
  * @file config/mail.js
- * @description Resilient mail sender with provider fallback (Resend + Mailjet).
+ * @description Resilient mail sender with provider fallback (Resend + Gmail/SMTP + Mailjet).
  */
 import Mailjet from "node-mailjet";
+import nodemailer from "nodemailer";
 import { Resend } from "resend";
 
 let mailjetClient = null;
 let resendClient = null;
+let smtpTransporter = null;
 
 const MAIL_SEND_TIMEOUT_MS = Math.max(
   1000,
-  Number(process.env.MAIL_SEND_TIMEOUT_MS || 12000)
+  Number(process.env.MAIL_SEND_TIMEOUT_MS || 15000)
 );
 
 const PROVIDERS = {
   RESEND: "resend",
+  SMTP: "smtp",
   MAILJET: "mailjet",
 };
 
 const hasResendCredentials = () => Boolean(process.env.RESEND_API_KEY);
+
+const hasSmtpCredentials = () =>
+  Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASS);
 
 const hasMailjetCredentials = () =>
   Boolean(process.env.MAILJET_API_KEY && process.env.MAILJET_SECRET_KEY);
@@ -135,30 +141,57 @@ const getResendClient = () => {
   return resendClient;
 };
 
+const getSmtpTransporter = () => {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    throw buildMailError("Missing EMAIL_USER or EMAIL_PASS for SMTP", {
+      statusCode: 500,
+      code: "SMTP_CONFIG_MISSING",
+      provider: PROVIDERS.SMTP,
+    });
+  }
+
+  if (!smtpTransporter) {
+    smtpTransporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+  }
+
+  return smtpTransporter;
+};
+
 const resolveProviderOrder = () => {
   const explicit = String(process.env.MAIL_PROVIDER || "").trim().toLowerCase();
 
-  if (explicit === PROVIDERS.RESEND) return [PROVIDERS.RESEND, PROVIDERS.MAILJET];
-  if (explicit === PROVIDERS.MAILJET) return [PROVIDERS.MAILJET, PROVIDERS.RESEND];
+  if (explicit === PROVIDERS.RESEND) return [PROVIDERS.RESEND, PROVIDERS.SMTP, PROVIDERS.MAILJET];
+  if (explicit === PROVIDERS.SMTP) return [PROVIDERS.SMTP, PROVIDERS.RESEND, PROVIDERS.MAILJET];
+  if (explicit === PROVIDERS.MAILJET) return [PROVIDERS.MAILJET, PROVIDERS.SMTP, PROVIDERS.RESEND];
 
-  // Auto mode: pick available provider first.
-  if (hasResendCredentials()) return [PROVIDERS.RESEND, PROVIDERS.MAILJET];
-  if (hasMailjetCredentials()) return [PROVIDERS.MAILJET, PROVIDERS.RESEND];
+  // Auto mode: check available credentials in order of reliability
+  const order = [];
+  if (hasResendCredentials()) order.push(PROVIDERS.RESEND);
+  if (hasSmtpCredentials()) order.push(PROVIDERS.SMTP);
+  if (hasMailjetCredentials()) order.push(PROVIDERS.MAILJET);
 
-  // Default preference when nothing is configured yet.
-  return [PROVIDERS.RESEND, PROVIDERS.MAILJET];
+  if (!order.length) return [PROVIDERS.RESEND, PROVIDERS.SMTP, PROVIDERS.MAILJET];
+  return order;
 };
 
 export const inspectMailConfig = () => {
   const providerOrder = resolveProviderOrder();
   const missing = {
     resend: [],
+    smtp: [],
     mailjet: [],
     sender: [],
   };
 
   if (!process.env.RESEND_API_KEY) missing.resend.push("RESEND_API_KEY");
-
+  if (!process.env.EMAIL_USER) missing.smtp.push("EMAIL_USER");
+  if (!process.env.EMAIL_PASS) missing.smtp.push("EMAIL_PASS");
   if (!process.env.MAILJET_API_KEY) missing.mailjet.push("MAILJET_API_KEY");
   if (!process.env.MAILJET_SECRET_KEY) missing.mailjet.push("MAILJET_SECRET_KEY");
 
@@ -170,6 +203,7 @@ export const inspectMailConfig = () => {
     providerPreference: String(process.env.MAIL_PROVIDER || "auto").toLowerCase() || "auto",
     providerOrder,
     resendConfigured: hasResendCredentials(),
+    smtpConfigured: hasSmtpCredentials(),
     mailjetConfigured: hasMailjetCredentials(),
     senderConfigured: Boolean(process.env.MAIL_FROM_EMAIL || process.env.EMAIL_USER),
     missing,
@@ -210,6 +244,32 @@ const sendViaResend = async ({ recipients, subject, text, html, fromEmail, fromN
       statusCode: err?.statusCode || 502,
       code: "RESEND_SEND_FAILED",
       provider: PROVIDERS.RESEND,
+      details: err,
+    });
+  }
+};
+
+const sendViaSmtp = async ({ recipients, subject, text, html, fromEmail, fromName }) => {
+  const transporter = getSmtpTransporter();
+
+  try {
+    const info = await withTimeout(
+      transporter.sendMail({
+        from: fromName ? `"${fromName}" <${fromEmail}>` : fromEmail,
+        to: recipients,
+        subject: subject || "",
+        text: text || html || "",
+        html: html || text || "",
+      }),
+      { timeoutMs: MAIL_SEND_TIMEOUT_MS, provider: PROVIDERS.SMTP, operation: "send" }
+    );
+
+    return { provider: PROVIDERS.SMTP, response: info };
+  } catch (err) {
+    throw buildMailError(err?.message || "SMTP send failed", {
+      statusCode: 502,
+      code: "SMTP_SEND_FAILED",
+      provider: PROVIDERS.SMTP,
       details: err,
     });
   }
@@ -294,6 +354,14 @@ export const sendEmail = async ({
       }
     }
 
+    if (provider === PROVIDERS.SMTP && hasSmtpCredentials()) {
+      try {
+        return await sendViaSmtp({ recipients, subject, text, html, fromEmail, fromName });
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+
     if (provider === PROVIDERS.MAILJET && hasMailjetCredentials()) {
       try {
         return await sendViaMailjet({ recipients, subject, text, html, fromEmail, fromName });
@@ -303,9 +371,9 @@ export const sendEmail = async ({
     }
   }
 
-  if (!hasResendCredentials() && !hasMailjetCredentials()) {
+  if (!hasResendCredentials() && !hasSmtpCredentials() && !hasMailjetCredentials()) {
     throw buildMailError(
-      "No mail provider configured. Set RESEND_API_KEY or MAILJET_API_KEY/MAILJET_SECRET_KEY",
+      "No mail provider configured. Set RESEND_API_KEY, EMAIL_USER/EMAIL_PASS (Gmail SMTP), or MAILJET_API_KEY/MAILJET_SECRET_KEY",
       { statusCode: 500, code: "MAIL_PROVIDER_NOT_CONFIGURED" }
     );
   }
@@ -315,10 +383,11 @@ export const sendEmail = async ({
 
   if (
     topError?.code === "MAILJET_ACCOUNT_BLOCKED" &&
-    !hasResendCredentials()
+    !hasResendCredentials() &&
+    !hasSmtpCredentials()
   ) {
     throw buildMailError(
-      "Mailjet account is temporarily blocked (401). Configure RESEND_API_KEY or contact Mailjet support.",
+      "Mailjet account is temporarily blocked (401). Configure RESEND_API_KEY, Gmail SMTP, or contact Mailjet support.",
       {
         statusCode: 401,
         code: "MAILJET_ACCOUNT_BLOCKED",
@@ -368,6 +437,15 @@ export const verifyMailConnection = async () => {
       }
 
       return { ok: true, provider: PROVIDERS.RESEND };
+    }
+
+    if (provider === PROVIDERS.SMTP && hasSmtpCredentials()) {
+      const transporter = getSmtpTransporter();
+      await withTimeout(
+        transporter.verify(),
+        { timeoutMs: MAIL_SEND_TIMEOUT_MS, provider: PROVIDERS.SMTP, operation: "verify" }
+      );
+      return { ok: true, provider: PROVIDERS.SMTP };
     }
 
     if (provider === PROVIDERS.MAILJET && hasMailjetCredentials()) {
