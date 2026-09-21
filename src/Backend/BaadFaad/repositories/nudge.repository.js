@@ -2,7 +2,13 @@ import { getPrisma } from '../config/prisma.js';
 import { fromPaisa, toPaisa } from '../utils/money.js';
 
 const moneyNumber = (paisa) => Number(fromPaisa(paisa));
-const toDto = (row) => row && ({ ...row, _id: row.id, amount: row.amountPaisa == null ? row.amount : moneyNumber(row.amountPaisa) });
+const toDto = (row) =>
+  row && {
+    ...row,
+    _id: row.id,
+    amount: row.amountPaisa == null ? row.amount : moneyNumber(row.amountPaisa),
+    amountPaisa: row.amountPaisa != null ? row.amountPaisa.toString() : null,
+  };
 
 async function splitContext(tx, splitParticipantId, senderId) {
   const target = await tx.splitParticipant.findUnique({
@@ -20,8 +26,10 @@ async function splitContext(tx, splitParticipantId, senderId) {
   const senderRow = target.split.relationalParticipants.find((row) => row.userId === senderId);
   const authorized = target.split.createdBy === senderId || (highestPaid > 0n && senderRow && paidByParticipant.get(senderRow.id) === highestPaid);
   if (!authorized) return { status: 'forbidden' };
-  const paid = paidByParticipant.get(target.id) || 0n;
-  const duePaisa = target.amountPaisa > paid ? target.amountPaisa - paid : 0n;
+  const gatewayPaid = paidByParticipant.get(target.id) || 0n;
+  const directPaid = target.paidAmountPaisa || 0n;
+  const totalPaid = gatewayPaid > directPaid ? gatewayPaid : directPaid;
+  const duePaisa = target.amountPaisa > totalPaid ? target.amountPaisa - totalPaid : 0n;
   if (duePaisa === 0n) return { status: 'settled' };
   const group = await tx.group.findFirst({ where: { splitId: target.splitId }, select: { name: true, id: true } });
   const sender = await tx.user.findUnique({ where: { id: senderId }, select: { name: true, email: true } });
@@ -43,8 +51,8 @@ export async function reserveNudge({ senderId, splitParticipantId, currency = 'N
     const identity = context.target.user || context.target.participant;
     const nudge = await tx.nudge.create({ data: {
       senderId, splitParticipantId, recipientName: context.target.displayName,
-      recipientEmail: context.target.email || identity?.email || '', senderName: context.sender.name,
-      groupName: context.group?.name || context.target.split.name || 'Split', amount: moneyNumber(context.duePaisa), amountPaisa: context.duePaisa,
+      recipientEmail: context.target.email || identity?.email || '', senderName: context.sender?.name || 'Group Host',
+      groupName: context.group?.name || context.target.split?.name || 'Split', amount: moneyNumber(context.duePaisa), amountPaisa: context.duePaisa,
       currency: String(currency || 'NPR').slice(0, 3), dueDate: String(dueDate || 'soon').slice(0, 100),
       payLink: String(payLink || '#').slice(0, 2000), status: 'pending',
     } });

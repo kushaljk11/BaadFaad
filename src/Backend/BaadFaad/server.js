@@ -11,6 +11,11 @@
  *
  * @module server
  */
+// Global BigInt JSON serialization polyfill
+BigInt.prototype.toJSON = function () {
+  return this.toString();
+};
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';

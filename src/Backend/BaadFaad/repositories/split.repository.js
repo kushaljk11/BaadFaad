@@ -113,7 +113,10 @@ export function toSplitDto(split) {
           amount: p.paidAmount,
           amountPaisa: p.paidAmountPaisa.toString(),
         })),
-    settlement: settlementResult.transfers,
+    settlement: settlementResult.transfers.map((t) => ({
+      ...t,
+      amountPaisa: t.amountPaisa ? t.amountPaisa.toString() : '0',
+    })),
     payments: split.payments, totalAmount: moneyNumber(totalPaisa),
     calculatedAt: split.calculatedAt, finalizedAt: split.finalizedAt, notes: split.notes,
     createdAt: split.createdAt, updatedAt: split.updatedAt,
